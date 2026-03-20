@@ -1,5 +1,5 @@
 /* --------------------------------------------------------------
-   NMSE.Site — JavaScript
+   NMSE.Site - JavaScript
    • Animated star-field background (NMS spectral-class colours)
    • Auto-populates the download link from the latest GitHub
      Release so users get a direct .zip download without needing
@@ -9,13 +9,13 @@
 
 // -- Portable configuration ------------------------------------ */
 const SITE_CONFIG = {
-  owner: "vectorcmdr",             // GitHub user / org
-  repo: "NMSE",                    // Repository name
-  releaseTag: "latest",            // Tag used by the CI for rolling builds
-  workflowFile: "build-nmse.yml",  // Workflow that produces the artifact (fallback)
-  discordInvite: "#",              // Replace with actual invite URL
-  userdoc: "docs/user/README.md",  // Path to user guide documentation in the repo
-  devdoc: "docs/dev/README.md",    // Path to developer documentation in the repo
+  owner: "vectorcmdr",                              // GitHub user / org
+  repo: "NMSE",                                     // Repository name
+  releaseTag: "latest",                             // Tag used by the CI for rolling builds
+  workflowFile: "build-nmse.yml",                   // Workflow that produces the artifact (fallback)
+  discordInvite: "https://discord.gg/WbDQKKP3us",   // Replace with actual invite URL
+  userdoc: "docs/user/README.md",                   // Path to user guide documentation in the repo
+  devdoc: "docs/dev/README.md",                     // Path to developer documentation in the repo
 };
 
 // -- Helpers ---------------------------------------------------- */
@@ -77,7 +77,7 @@ function timeAgo(dateString) {
       }
     })
     .catch(() => {
-      // Release not found — fall back to Actions page
+      // Release not found - fall back to Actions page
       link.href = actionsUrl;
       note.textContent = fallbackNote;
     });
@@ -123,14 +123,14 @@ function timeAgo(dateString) {
 
   // NMS stellar spectral-class colours
   const STAR_COLOURS = [
-    [107, 136, 255],  // O — Blue
-    [160, 196, 255],  // B — Blue-white
-    [240, 240, 255],  // A — White
-    [255, 248, 224],  // F — Yellow-white
-    [255, 229, 102],  // G — Yellow
-    [255, 170,  51],  // K — Orange
-    [255, 102,  51],  // M — Red
-    [ 51, 255, 153],  // E — Green (exotic)
+    [107, 136, 255],  // O - Blue
+    [160, 196, 255],  // B - Blue-white
+    [240, 240, 255],  // A - White
+    [255, 248, 224],  // F - Yellow-white
+    [255, 229, 102],  // G - Yellow
+    [255, 170,  51],  // K - Orange
+    [255, 102,  51],  // M - Red
+    [ 51, 255, 153],  // E - Green (exotic)
   ];
 
   let width, height, stars;
