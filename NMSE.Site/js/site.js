@@ -9,13 +9,13 @@
 
 // -- Portable configuration ------------------------------------ */
 const SITE_CONFIG = {
-  owner: "vectorcmdr",                              // GitHub user / org
-  repo: "NMSE",                                     // Repository name
-  releaseTag: "latest",                             // Tag used by the CI for rolling builds
-  workflowFile: "build-nmse.yml",                   // Workflow that produces the artifact (fallback)
-  discordInvite: "https://discord.gg/WbDQKKP3us",   // Replace with actual invite URL
-  userdoc: "docs/user/README.md",                   // Path to user guide documentation in the repo
-  devdoc: "docs/dev/README.md",                     // Path to developer documentation in the repo
+  owner: "vectorcmdr",                                                         // GitHub user / org
+  repo: "NMSE",                                                                // Repository name
+  releaseTag: "latest",                                                        // Tag used by the CI for rolling builds
+  workflowFile: "build-nmse.yml",                                              // Workflow that produces the artifact (fallback)
+  discordInvite: "https://discord.gg/WbDQKKP3us",                              // Replace with actual invite URL
+  userdoc: "https://github.com/vectorcmdr/NMSE/blob/main/docs/user/README.md", // Path to user guide documentation in the repo
+  devdoc: "https://github.com/vectorcmdr/NMSE/blob/main/docs/dev/README.md",   // Path to developer documentation in the repo
 };
 
 // -- Helpers ---------------------------------------------------- */
@@ -111,8 +111,8 @@ function timeAgo(dateString) {
   footerLink.href = `https://github.com/${SITE_CONFIG.owner}`;
   footerLink.textContent = SITE_CONFIG.owner;
 
-  docsUserLink.href = `https://github.com/${SITE_CONFIG.owner}/${SITE_CONFIG.repo}/${SITE_CONFIG.userdoc}`;
-  docsDevLink.href = `https://github.com/${SITE_CONFIG.owner}/${SITE_CONFIG.repo}/${SITE_CONFIG.devdoc}`;
+  docsUserLink.href = `${SITE_CONFIG.userdoc}`;
+  docsDevLink.href = `${SITE_CONFIG.devdoc}`;
 })();
 
 // -- Star-field (NMS spectral-class colours) -------------------- */
