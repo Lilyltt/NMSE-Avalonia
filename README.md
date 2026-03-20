@@ -183,7 +183,8 @@ dotnet test NMSE.Extractor.Tests/
 - [ ] Core moved to a lib as NuGet package
 - [ ] Native cross-platform UI (Eto.Forms migration)
 - [ ] Base teleport reordering
-- [ ] Starship/Multi-tool/etc. collection archive system
+- [ ] Support for in-game archives
+- [ ] Starship/Multi-tool/etc. collection system
 - [ ] Corvette build order optimizer
 - [ ] Integrations with NMS Optimizer app
 
