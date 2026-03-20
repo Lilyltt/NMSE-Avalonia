@@ -8,7 +8,10 @@ namespace NMSE.Tests;
 
 /// <summary>
 /// Tests for the extracted Logic classes (pure data operations, no WinForms).
+/// Shares the MutableStaticDatabases collection to prevent parallel execution
+/// with UiStringsTests / DatabaseLocalisationTests which mutate UiStrings state.
 /// </summary>
+[Collection("MutableStaticDatabases")]
 public class LogicTests
 {
     public string referencePath = "_ref";
@@ -16,6 +19,7 @@ public class LogicTests
     public LogicTests()
     {
         EnsureJsonDatabasesLoaded();
+        EnsureUiStringsLoaded();
     }
 
     private static bool _jsonLoaded;
@@ -45,6 +49,19 @@ public class LogicTests
 
             _jsonLoaded = true;
         }
+    }
+
+    /// <summary>
+    /// Re-loads UiStrings if another test class (e.g. UiStringsTests) called
+    /// UiStrings.Reset() after <see cref="EnsureJsonDatabasesLoaded"/> already ran.
+    /// </summary>
+    private static void EnsureUiStringsLoaded()
+    {
+        if (UiStrings.TotalKeyCount > 0) return;
+        var langDir = FindResourceLangDir();
+        if (langDir == null) return;
+        UiStrings.SetDirectory(langDir);
+        UiStrings.Load("en-GB");
     }
 
     // --- StarshipLogic -----------------------------------------------

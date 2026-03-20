@@ -102,6 +102,7 @@ NMSE clears all settlement fields in-place (Name, SeedValue, Owner LID/UID/USN, 
 | Feature | NMSE | NomNom | NMSSaveEditor |
 |---|---|---|---|
 | **Storage container inventories (0-9)** | ✅ | ✅ | ✅ |
+| **Storage container renaming** | ✅ | ✅ | ❌ |
 | **Nutrient Processor inventory** | ✅ | ✅ | ❌ |
 | **Fish Platform inventory** | ✅ | ❌ | 🟡 |
 | **Fish Bait Box inventory** | ✅ | ❌ | ❌ |

@@ -5,14 +5,12 @@ namespace NMSE.Tests;
 /// <summary>
 /// Tests for data layer classes: WordDatabase, CompanionDatabase, GalaxyDatabase,
 /// TechAdjacencyDatabase, JsonNameMapper, and CoordinateHelper.
+/// Shares the MutableStaticDatabases collection to prevent parallel execution
+/// with UiStringsTests / DatabaseLocalisationTests which mutate UiStrings state.
 /// </summary>
+[Collection("MutableStaticDatabases")]
 public class DataLayerTests
 {
-    // --- Initialization (ensure UiStrings is loaded for localised fallbacks) ---
-
-    private static bool _uiStringsLoaded;
-    private static readonly object _initLock = new();
-
     public DataLayerTests()
     {
         EnsureUiStringsLoaded();
@@ -20,18 +18,11 @@ public class DataLayerTests
 
     private static void EnsureUiStringsLoaded()
     {
-        if (_uiStringsLoaded) return;
-        lock (_initLock)
-        {
-            if (_uiStringsLoaded) return;
-            var langDir = FindResourceLangDir();
-            if (langDir != null)
-            {
-                UiStrings.SetDirectory(langDir);
-                UiStrings.Load("en-GB");
-            }
-            _uiStringsLoaded = true;
-        }
+        if (UiStrings.TotalKeyCount > 0) return;
+        var langDir = FindResourceLangDir();
+        if (langDir == null) return;
+        UiStrings.SetDirectory(langDir);
+        UiStrings.Load("en-GB");
     }
 
     private static string? FindResourceLangDir()
