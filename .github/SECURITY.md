@@ -2,7 +2,7 @@
 
 ## Reporting a Vulnerability
 
-If you find a security issue, please report it responsibly by sending a private message to the repo owner or a maintainer on **Discord** with:
+If you find a security issue, please report it responsibly by sending a private message to the repo owner or a maintainer on [**Discord**](https://discord.gg/WbDQKKP3us) with:
 
 - Description of the issue
 - Steps to reproduce

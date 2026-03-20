@@ -1,4 +1,4 @@
-# Contributing to {{OWNER}}/{{REPO}}
+# Contributing to NMSE
 
 Thank you for your interest in contributing! This project is licensed under **GPL-3.0**, and we welcome contributions of all kinds.
 
@@ -45,12 +45,12 @@ By contributing, you agree to abide by our [Code of Conduct](CODE_OF_Conduct.md)
 
 ## 💰 Sponsorship & Donations
 
-If you’d like to support ongoing development, consider sponsoring the project via [GitHub Sponsors](https://github.com/sponsors/{{OWNER}}) or donating via a [Ko-fi](https://ko-fi.com/vector_cmdr). Supporting the project helps cover hosting, tooling, and maintenance time.
+If you’d like to support ongoing development, consider sponsoring the project via [GitHub Sponsors](https://github.com/sponsors/vectorcmdr) or donating via a [Ko-fi](https://ko-fi.com/vector_cmdr). Supporting the project helps cover hosting, tooling, and maintenance time.
 
-  <a href="https://github.com/sponsors/{{OWNER}}" target="_blank" rel="noopener noreferrer">
+  <a href="https://github.com/sponsors/vectorcmdr" target="_blank" rel="noopener noreferrer">
     <img src="https://img.shields.io/badge/GitHub-Sponsors-000000?logo=github&logoColor=ffffff" alt="GitHub Sponsors" />
   </a>
-  &nbsp;
+
   <a href="https://ko-fi.com/vector_cmdr" target="_blank" rel="noopener noreferrer">
     <img src="https://img.shields.io/badge/Ko--fi-Donate-29abe0?logo=ko-fi&logoColor=ffffff" alt="Ko-fi" />
   </a>

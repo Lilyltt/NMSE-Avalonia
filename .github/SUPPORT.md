@@ -15,7 +15,7 @@ For bugs, feature requests, or questions:
 
 ## 💬 Community
 
-### [![Discord](https://img.shields.io/badge/Discord-Join%20Chat-7289da?logo=discord&logoColor=ffffff)](https://discord.gg/your-invite)
+### [![Discord](https://img.shields.io/badge/Discord-Join%20Chat-7289da?logo=discord&logoColor=ffffff)](https://discord.gg/WbDQKKP3us)
 
 ## 📘 Developer Documentation
 
