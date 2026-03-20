@@ -17,8 +17,6 @@ assignees: ''
 
 ## 🐞 Bug Description
 
-Add additional relevant labels.
-
 A clear and concise description of what the bug is.
 
 Please add any relevant logs, screenshots, or files as attachments.

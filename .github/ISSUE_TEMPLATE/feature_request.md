@@ -16,8 +16,6 @@ assignees: ''
 
 ## ✨ Feature Description
 
-Don't forget to add additional relevant labels.
-
 Describe the feature you would like to see.
 
 ## 🎯 Goal
