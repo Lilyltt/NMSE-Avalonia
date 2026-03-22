@@ -1,8 +1,10 @@
-# Cross-Platform Work Plan: NMSE WinForms -> Eto.Forms
+# Cross-Platform Work Plan: NMSE WinForms -> Avalonia UI
 
 ## Single Source of Truth for Cross-Platform Migration
 
-**Last updated:** 2026-03-17
+**Last updated:** 2026-03-22
+
+> **Note:** The previous Eto.Forms-based workplan is archived in [`cross-platform-workplan-old.md`](cross-platform-workplan-old.md).
 
 ---
 
@@ -11,14 +13,14 @@
 1. [Decision Summary](#1-decision-summary)
 2. [Architecture Overview](#2-architecture-overview)
 3. [Phase 0 - Wine/Compatibility Layer Quick-Ship](#3-phase-0--winecompatibility-layer-quick-ship)
-4. [Phase 1 - NMSE.Lib Extraction (Shared Library)](#4-phase-1--nmselib-extraction)
-5. [Phase 2 - Eto.Forms UI Conversion](#5-phase-2--etoforms-ui-conversion)
-6. [Phase 3 - Polish, Packaging & Release](#6-phase-3--polish-packaging--release)
-7. [Working Methodology](#7-working-methodology)
-8. [Risk Register](#8-risk-register)
-9. [Appendix A - File Inventory](#appendix-a--file-inventory)
-10. [Appendix B - WinForms -> Eto.Forms Control Map](#appendix-b--winforms--etoforms-control-map)
-11. [Appendix C - Eto.Forms Dependencies by Platform](#appendix-c--etoforms-dependencies-by-platform)
+4. [Phase 1 - Avalonia UI Implementation](#4-phase-1--avalonia-ui-implementation)
+5. [Phase 2 - Polish, Packaging & Release](#5-phase-2--polish-packaging--release)
+6. [Working Methodology](#6-working-methodology)
+7. [Risk Register](#7-risk-register)
+8. [Appendix A - File Inventory](#appendix-a--file-inventory)
+9. [Appendix B - WinForms -> Avalonia Control Map](#appendix-b--winforms--avalonia-control-map)
+10. [Appendix C - Avalonia Dependencies & Platform Support](#appendix-c--avalonia-dependencies--platform-support)
+11. [Appendix D - UI/UX Design Reference: Sidebar Navigation & Dark Theme](#appendix-d--uiux-design-reference-sidebar-navigation--dark-theme)
 
 ---
 
@@ -26,29 +28,35 @@
 
 | Decision | Choice | Rationale |
 |----------|--------|-----------|
-| **UI Framework** | **Eto.Forms** | Closest API to WinForms - near-mechanical translation. Event-driven (not MVVM). Same `Form`, `Panel`, `Drawable`, `Graphics` concepts. |
-| **Migration strategy** | **Sequential, not coexistent** | Extract NMSE.Lib on `main`, then branch and fully convert UI to Eto.Forms. No period where both WinForms and Eto.Forms coexist in the same binary. |
+| **UI Framework** | **Avalonia UI** | Best-in-class cross-platform .NET UI framework. Skia-based rendering gives pixel-perfect consistency across Windows, Linux, and macOS. Built-in theming (dark/light), rich styling, and a large, active community (26k+ GitHub stars). |
+| **Migration strategy** | **In-place conversion** | Convert the single NMSE project directly from WinForms to Avalonia on the `avalonia` branch. No intermediate library extraction step. |
 | **Interim cross-platform** | **Wine bundle + setup guides** | Ship a Wine-bundled Linux version and CrossOver/Whisky guides for macOS immediately, zero code changes. |
-| **Branch strategy** | `main` -> NMSE.Lib extraction -> merge -> branch `eto-forms` -> UI conversion -> merge when ready |
+| **Branch strategy** | `main` -> branch `avalonia` -> UI implementation -> merge into `experimental` -> merge into `main` when ready |
+| **Navigation model** | **Collapsible sidebar** | Replace top-level tabs with a left-hand sidebar panel. Icons + names when expanded, icons-only when collapsed. Toggle button at the top of the sidebar. |
+| **Default theme** | **Dark** | Dark theme by default with a user-accessible toggle to switch to light. Leverages Avalonia's built-in `FluentTheme` with `Dark` / `Light` variants. |
 | **Work cadence** | Work produced in lots -> maintainer tests each lot -> iterate -> merge |
 
-### Why Eto.Forms over Avalonia
+### Why Avalonia over Eto.Forms
 
-While Avalonia has a larger community and richer rendering (Skia), Eto.Forms was chosen because:
+The project originally considered Eto.Forms for its API proximity to WinForms. Collaboration from other developers makes Avalonia more practical while also being the better long-term choice:
 
-1. **API proximity** - Eto's `Form`, `Panel`, `Drawable`, `Graphics`, `Button`, `ComboBox`, `MessageBox` are near-identical to WinForms equivalents. This means the existing ~21,800 lines of UI code can be translated almost line-by-line rather than redesigned into XAML/MVVM.
-2. **Event-driven model** - No need to learn/adopt MVVM, data binding, or XAML. The existing imperative style is preserved.
-3. **Faster port** - Estimated 6–8 weeks vs 8–10 for Avalonia.
-4. **Native controls** - Eto wraps real WinForms on Windows, GTK on Linux, Cocoa on macOS. Controls look and behave natively per-platform.
-5. **Lower risk** - The mechanical translation reduces the risk of subtle behaviour changes.
+1. **Skia rendering engine**  - Every pixel is drawn by Skia, guaranteeing identical appearance across Windows, Linux, and macOS. No surprises from native control differences between platforms.
+2. **Built-in theming**  - Avalonia ships `FluentTheme` with `Dark` and `Light` variants out of the box. The planned dark-by-default UI is trivial to implement. Eto.Forms wraps native controls, making cross-platform dark theming significantly harder.
+3. **Modern layout system**  - XAML-based layout (Grid, StackPanel, DockPanel) is powerful and composable. The sidebar navigation pattern is straightforward to build. Eto.Forms has no direct equivalent for the collapsible sidebar design.
+4. **Large, active community**  - 26k+ GitHub stars, frequent releases, extensive documentation, and active Discord. Eto.Forms has ~3.5k stars and slower development cadence.
+5. **Custom rendering**  - `DrawingPresenter` / custom `Control.Render()` with Skia gives far more capable rendering than Eto's `Drawable`, which is important for the InventoryGridPanel's slot cells, adjacency borders, and marquee labels.
+6. **MVVM optional**  - Avalonia supports MVVM but does **not require** it. Code-behind event-driven patterns work fine, allowing a migration strategy similar to the WinForms approach where imperative logic translates directly.
+7. **No native toolkit dependency**  - Unlike Eto.Forms which requires GTK3 on Linux and MonoMac on macOS, Avalonia is entirely self-contained. Zero external dependencies for end users.
+8. **Data grid support**  - `Avalonia.Controls.DataGrid` provides a full-featured data grid (sorting, editing, custom cell templates, virtualisation) that matches or exceeds WinForms `DataGridView`. Eto.Forms' `GridView` is more limited.
+9. **Production-proven**  - Used by JetBrains (Rider), Warp terminal, Lunacy, and many other production applications.
 
 ### Trade-offs Accepted
 
-- Smaller community (~3.5k vs 26k+ GitHub stars)
-- GTK dependency on Linux (GTK3+ must be installed)
-- MonoMac dependency on macOS (can lag behind macOS versions)
-- Custom dark theming is harder (native controls don't support custom themes as easily as Skia)
-- Less powerful rendering than Skia for complex graphics (but Eto's `Drawable` + `Graphics` covers the inventory grid use case)
+- **XAML learning curve**  - Developers need familiarity with AXAML (Avalonia's XAML dialect). However, simple layouts can also be built entirely in C# code-behind.
+- **Not native controls**  - Avalonia draws its own controls via Skia rather than wrapping native OS controls. For NMSE this is a benefit (consistent appearance), but some users may notice non-native feel.
+- **Larger binary size**  - Skia runtime adds ~20-30 MB to the self-contained publish. Acceptable for a desktop application.
+- **No XAML hot reload in all IDEs**  - Hot reload works in Rider and VS with extensions. Less polished than WinForms designer, but Avalonia previewer in Rider/VS is functional.
+- **Port is a redesign, not a translation**  - Unlike Eto.Forms (near-mechanical WinForms translation), Avalonia requires rethinking layouts in XAML/code-behind. This is offset by the superior result.
 
 ---
 
@@ -58,41 +66,51 @@ While Avalonia has a larger community and richer rendering (Skia), Eto.Forms was
 
 ```
 NMSE.csproj (net10.0-windows, WinForms)
-├── Core/     (21 files, 5,712 lines)   ─ business logic
-├── Data/     (24 files, 15,142 lines)  ─ databases, lookups, localisation
-├── IO/       (12 files, 3,781 lines)   ─ save file I/O, compression
-├── Models/   (20 files, 2,708 lines)   ─ data structures, JSON engine
-├── Config/   (1 file, 191 lines)       ─ app settings
-├── UI/       (48 files, 21,833 lines)  ─ WinForms panels, controls, utilities
-├── Resources/ (~4,950 files)           ─ icons, JSON, localisation, map
-└── Program.cs                          ─ WinForms entry point
+├── Core/     (21 files, 5,712 lines)    - business logic
+├── Data/     (24 files, 15,142 lines)   - databases, lookups, localisation
+├── IO/       (12 files, 3,781 lines)    - save file I/O, compression
+├── Models/   (20 files, 2,708 lines)    - data structures, JSON engine
+├── Config/   (1 file, 191 lines)        - app settings
+├── UI/       (46 files, 24,839 lines)   - WinForms panels, controls, utilities
+├── Resources/ (~4,950 files)            - icons, JSON, localisation, map
+└── Program.cs                           - WinForms entry point
 ```
 
-### Target Architecture (Shared Lib + Eto.Forms)
+### Target Architecture (Avalonia, single project)
 
 ```
 NMSE.slnx
-├── NMSE.Lib/              (net10.0 - cross-platform shared library)
-│   ├── Core/              (21 files - move as-is)
-│   ├── Data/              (24 files - IconManager abstracted)
-│   ├── IO/                (12 files - move as-is)
-│   ├── Models/            (20 files - move as-is)
-│   ├── Config/            (1 file - move as-is)
-│   └── Resources/         (~4,950 files - JSON, icons, localisation, map)
-│
-├── NMSE/                  (net10.0 - Eto.Forms cross-platform UI)
-│   ├── UI/                (translated panels, controls, utilities)
-│   ├── Program.cs         (Eto.Forms entry point with platform detection)
-│   └── References -> NMSE.Lib
-│
-├── NMSE.Tests/            (net10.0 - references NMSE.Lib directly)
-├── NMSE.Extractor/        (net10.0-windows - unchanged)
-└── NMSE.Extractor.Tests/  (net10.0 - unchanged)
++-- NMSE/                  (net10.0 - Avalonia cross-platform app)
+|   +-- Core/              (21 files - unchanged)
+|   +-- Data/              (24 files - IconManager updated for Avalonia)
+|   +-- IO/                (12 files - unchanged)
+|   +-- Models/            (20 files - unchanged)
+|   +-- Config/            (1 file - unchanged)
+|   +-- Resources/         (~4,950 files - JSON, icons, localisation, map)
+|   +-- UI/
+|   |   +-- Views/         (panel views - AXAML + code-behind)
+|   |   +-- Controls/      (custom controls - SlotCell, MarqueeLabel, etc.)
+|   |   +-- Util/          (utilities - IconProvider, FontManager, etc.)
+|   |   +-- Sidebar/       (sidebar navigation shell)
+|   |   +-- Themes/        (dark/light theme definitions)
+|   +-- App.axaml          (Avalonia application definition + theme)
+|   +-- App.axaml.cs       (Application code-behind)
+|   +-- MainWindow.axaml   (Main window with sidebar + content area)
+|   +-- MainWindow.axaml.cs
+|   +-- Program.cs         (Avalonia entry point)
+|
++-- NMSE.Tests/            (net10.0 - references NMSE directly)
++-- NMSE.Extractor/        (net10.0-windows - unchanged)
++-- NMSE.Extractor.Tests/  (net10.0 - unchanged)
 ```
 
-### Key Architectural Principle
+### Key Architectural Principles
 
-**No UI code in NMSE.Lib.** The shared library contains zero references to any UI framework - not WinForms, not Eto.Forms. Icon handling is abstracted behind an `IIconProvider` interface that each UI project implements.
+1. **Sidebar navigation replaces tabs.** The 15 top-level tabs become sidebar items with icons. The sidebar can be expanded (icon + label) or collapsed (icon only) via a toggle button at its top. Content area loads the selected panel.
+
+2. **Dark theme by default.** The Avalonia `FluentTheme` ships with `Dark` and `Light` variants. NMSE defaults to `Dark`, with a user toggle in the menu bar to switch. Custom accent colours for inventory grid cells, adjacency borders, etc. are defined in theme resource dictionaries.
+
+3. **1:1 functionality parity.** Every panel, sub-panel, tab, button, field, grid, combo box, tooltip, context menu, marquee label, inventory slot cell, adjacency colour system, and item count/amount display from the WinForms version must have a functional equivalent in the Avalonia version. No features are dropped or deferred.
 
 ---
 
@@ -111,9 +129,9 @@ NMSE.slnx
 | **Work** | Create a Linux launch script (`nmse.sh`), test the Windows build under Wine, document known quirks, create a tar.gz distribution layout |
 | **Deliverables** | `scripts/linux/nmse.sh`, `scripts/linux/README.md`, `docs/wine-linux-guide.md` |
 | **Additional Deliverables** | `scripts/linux/build-appimage.sh` (AppImage builder with bundled Wine), `scripts/linux/AppRun` (AppImage entry point), `scripts/linux/nmse.desktop` (FreeDesktop entry), `scripts/linux/bottles.yml` (Bottles configuration reference) |
-| **Effort** | ~1 session (1–2 hours) |
-| **User Testing** | Test on a Linux system with Wine installed - verify app launches, saves load, basic editing works |
-| **Acceptance** | NMSE launches via `./nmse.sh`, can load/save a save file, all 20 tabs render |
+| **Effort** | ~1-2 hours |
+| **User Testing** | Test on a Linux system with Wine installed  - verify app launches, saves load, basic editing works |
+| **Acceptance** | NMSE launches via `./nmse.sh`, can load/save a save file, all panels render |
 
 ### Lot 0.2 - macOS Setup Guides ✅
 
@@ -122,409 +140,397 @@ NMSE.slnx
 | **Work** | Write setup guides for CrossOver (paid, Apple Silicon), Whisky (free), and Bottles (Linux GUI). Test where possible. |
 | **Deliverables** | `docs/crossover-macos-guide.md`, `docs/whisky-macos-guide.md`, `docs/bottles-linux-guide.md` |
 | **Additional Deliverables** | `scripts/macos/nmse-whisky.rb` (Homebrew Cask formula for Whisky), `scripts/macos/README.md` (macOS packaging documentation) |
-| **Effort** | ~1 session (1–2 hours) |
+| **Effort** | ~1-2 hours |
 | **User Testing** | Review guides for accuracy, test on macOS if available |
-| **Acceptance** | Guides are clear, step-by-step, and include screenshots placeholders |
+| **Acceptance** | Guides are clear, step-by-step, and include screenshot placeholders |
 
-### Phase 0 Total: ~2 sessions (2–4 hours time)
+### Phase 0 Total: ~2-4 hours ✅ COMPLETE
 
 ---
 
-## 4. Phase 1 - NMSE.Lib Extraction
+## 4. Phase 1 - Avalonia UI Implementation
 
-**Goal:** Extract all platform-independent code into a standalone `NMSE.Lib` class library targeting `net10.0` (no `-windows`). The existing WinForms app continues to work by referencing NMSE.Lib.
+**Goal:** Replace the WinForms UI layer with an Avalonia UI application, producing a single cross-platform binary with a collapsible sidebar navigation and dark-by-default theme. Every panel, button, field, grid, tooltip, context menu, and custom control from the WinForms version must have a functional equivalent.
 
-**Branch:** `main` (direct commits - this is foundational restructuring)
+**Branch:** `avalonia` (branched from `main`)
 
-**Why on main:** The lib extraction doesn't change any behaviour - it's a refactor. The existing WinForms app keeps working throughout. Tests keep passing. This is safe to do on main because every lot is independently verifiable.
+**Approach:** The Avalonia project replaces the WinForms project entirely. There is no period where both coexist  - the branch is the Avalonia version, and `main` remains WinForms until the branch is merged through `experimental` first.
 
-### Lot 1.1 - Create NMSE.Lib Project Skeleton
-
-| Item | Detail |
-|------|--------|
-| **Work** | Create `NMSE.Lib/NMSE.Lib.csproj` targeting `net10.0`. Set up namespace (`NMSE`), resource handling, and the project in `NMSE.slnx`. |
-| **Files Created** | `NMSE.Lib/NMSE.Lib.csproj` |
-| **Files Modified** | `NMSE.slnx` |
-| **Effort** | ~30 minutes |
-| **User Testing** | `dotnet build NMSE.Lib/` compiles with 0 errors |
-| **Acceptance** | Empty lib project builds, is in solution |
-
-### Lot 1.2 - Move Models Layer
+### Lot 1.1 - Avalonia Project Setup & Theme Foundation
 
 | Item | Detail |
 |------|--------|
-| **Work** | Move all 20 files from `Models/` to `NMSE.Lib/Models/`. Update `NMSE.csproj` to exclude `NMSE.Lib/**` and add `<ProjectReference>` to NMSE.Lib. Verify all namespaces remain `NMSE.Models`. |
-| **Files Moved** | 20 files: `JsonObject.cs`, `JsonArray.cs`, `JsonParser.cs`, `JsonReader.cs`, `JsonException.cs`, `RawDouble.cs`, `BinaryData.cs`, `IPropertyChangeListener.cs`, `SaveFileMetadata.cs`, `DifficultyLevel.cs`, `Recipe.cs`, `Companion.cs`, `Frigate.cs`, `Inventory.cs`, `InventoryType.cs`, `Multitool.cs`, `MultitoolType.cs`, `Ship.cs`, `ShipClass.cs`, `ShipType.cs` |
-| **Files Modified** | `NMSE.csproj` (add ProjectReference, exclude Lib folder), `NMSE.Lib/NMSE.Lib.csproj` |
-| **Effort** | ~1 hour |
-| **Verification** | `dotnet build` (full solution), `dotnet test NMSE.Tests/ --no-build` (960 pass), `dotnet test NMSE.Extractor.Tests/ --no-build` (178 pass) |
-| **Acceptance** | All builds pass, all 1,138 tests pass, no namespace changes |
+| **Work** | Create new `NMSE/NMSE.csproj` targeting `net10.0` with Avalonia NuGet packages. Create `App.axaml` with `FluentTheme` configured for `Dark` mode by default. Create `Program.cs` with Avalonia `AppBuilder` entry point. Set up the theme switching infrastructure (Dark <-> Light) stored in `AppConfig.Theme`. |
+| **NuGet Packages** | `Avalonia` (core), `Avalonia.Desktop` (desktop hosting), `Avalonia.Themes.Fluent` (built-in Fluent theme), `Avalonia.Controls.DataGrid` (data grid), `Avalonia.Fonts.Inter` (default font fallback) |
+| **Files Created** | `NMSE/NMSE.csproj`, `NMSE/Program.cs`, `NMSE/App.axaml`, `NMSE/App.axaml.cs` |
+| **Theme Setup** | `FluentTheme` with `Mode=Dark` default. Custom resource dictionary for NMSE-specific colours (inventory cell backgrounds, adjacency border colours, status bar, etc.). Theme toggle reads/writes `AppConfig.Theme`. |
+| **Effort** | ~2-3 hours |
+| **User Testing** | `dotnet build` succeeds. `dotnet run` opens an empty Avalonia window with dark theme on Windows, Linux, or macOS. Theme can be toggled programmatically. |
+| **Acceptance** | Empty Avalonia app launches with dark Fluent theme. Light theme toggle works. Non-UI code (Core/, Data/, IO/, Models/) is unchanged. |
 
-### Lot 1.3 - Move Config Layer
+#### Theme Resource Dictionary Structure
 
-| Item | Detail |
-|------|--------|
-| **Work** | Move `Config/AppConfig.cs` to `NMSE.Lib/Config/`. |
-| **Files Moved** | 1 file: `AppConfig.cs` |
-| **Effort** | ~20 minutes |
-| **Verification** | Full build + tests |
-| **Acceptance** | All builds pass, all tests pass |
-
-### Lot 1.4 - Move IO Layer
-
-| Item | Detail |
-|------|--------|
-| **Work** | Move all 12 files from `IO/` to `NMSE.Lib/IO/`. |
-| **Files Moved** | 12 files: `SaveFileManager.cs`, `SaveSlotManager.cs`, `BinaryIO.cs`, `Lz4Compressor.cs`, `Lz4CompressorStream.cs`, `Lz4DecompressorStream.cs`, `Lz4BufferedCompressorStream.cs`, `Lz4ChunkedCompressorStream.cs`, `MetaCrypto.cs`, `MetaFileWriter.cs`, `MemoryDatManager.cs`, `ContainersIndexManager.cs` |
-| **Effort** | ~30 minutes |
-| **Verification** | Full build + tests |
-| **Acceptance** | All builds pass, all tests pass |
-
-### Lot 1.5 - Move Core Layer
-
-| Item | Detail |
-|------|--------|
-| **Work** | Move all 21 files from `Core/` to `NMSE.Lib/Core/`. Note: `MxmlRewardEditor.cs` uses `OperatingSystem.IsWindows()` and `[SupportedOSPlatform("windows")]` for Registry access - this is already correctly guarded and compiles on `net10.0`. |
-| **Files Moved** | 21 files: `AccountLogic.cs`, `BaseLogic.cs`, `CompanionLogic.cs`, `DiscoveryLogic.cs`, `ExocraftLogic.cs`, `ExosuitLogic.cs`, `ExportConfig.cs`, `FileNameHelper.cs`, `FreighterLogic.cs`, `FrigateLogic.cs`, `InventoryImportHelper.cs`, `MainStatsLogic.cs`, `MilestoneLogic.cs`, `MultitoolLogic.cs`, `MxmlRewardEditor.cs`, `RawJsonLogic.cs`, `SeedHelper.cs`, `SettlementLogic.cs`, `SquadronLogic.cs`, `StarshipLogic.cs`, `StatHelper.cs` |
-| **Effort** | ~30 minutes |
-| **Verification** | Full build + tests |
-| **Acceptance** | All builds pass, all tests pass |
-
-### Lot 1.6 - Move Data Layer (with IconManager Abstraction)
-
-| Item | Detail |
-|------|--------|
-| **Work** | Move all 24 Data files to `NMSE.Lib/Data/`. This is the most complex lot because: |
-| | 1. **`IconManager.cs`** - uses `System.Drawing.Image`, `Bitmap`, `Graphics`. Must be abstracted behind an `IIconProvider` interface. The concrete `IconManager` stays in the WinForms project (or a Windows-specific assembly). |
-| | 2. **`CoordinateHelper.cs`** - already has `#if WINFORMS` guards. The WINFORMS block stays excluded in NMSE.Lib (no `WINFORMS` define). |
-| | 3. All other 22 Data files have no WinForms dependencies and move as-is. |
-| **Interface Created** | `NMSE.Lib/Data/IIconProvider.cs` - platform-agnostic icon loading contract |
-| **Files Moved** | 22 of 24 Data files move to `NMSE.Lib/Data/` as-is |
-| **Files Remaining in NMSE.csproj** | `Data/IconManager.cs` (stays as WinForms-specific implementation of `IIconProvider`) |
-| **Files Modified** | `CoordinateHelper.cs` (verify `#if WINFORMS` guards are sufficient), any Core/UI files that reference `IconManager` directly (update to use `IIconProvider`) |
-| **Effort** | ~2–3 hours (most complex lot in Phase 1) |
-| **Verification** | Full build + tests |
-| **Acceptance** | NMSE.Lib builds on `net10.0` with 0 errors. WinForms app builds and works unchanged. All tests pass. `IIconProvider` interface is clean and usable by Eto.Forms later. |
-
-#### IIconProvider Interface Design
-
-```csharp
-namespace NMSE.Data;
-
-/// <summary>
-/// Platform-agnostic interface for loading and caching item icons.
-/// Each UI framework provides its own implementation using its native image types.
-/// </summary>
-public interface IIconProvider : IDisposable
-{
-    /// <summary>Gets an icon image for the given filename. Returns null if not found.</summary>
-    object? GetIcon(string? iconFilename);
-
-    /// <summary>Pre-loads icons for all items in the database in parallel.</summary>
-    void PreloadIcons(GameItemDatabase database);
-
-    /// <summary>Gets an icon for an item by looking up the icon filename from the database.</summary>
-    object? GetIconForItem(string? itemId, GameItemDatabase? database);
-}
+```
+NMSE/UI/Themes/
+├── NmseTheme.axaml           (shared colour/brush keys for both themes)
+├── NmseDarkOverrides.axaml   (dark-specific overrides: grid cell, slot, badges)
+└── NmseLightOverrides.axaml  (light-specific overrides)
 ```
 
-The `object?` return type allows each platform to return its native image type (`System.Drawing.Image` for WinForms, `Eto.Drawing.Bitmap` for Eto.Forms) without introducing framework dependencies in the shared library.
+Key resource keys:
+- `SlotCellBackground`, `SlotCellBorder`, `SlotCellAmountForeground`
+- `AdjacencyBorderGreen`, `AdjacencyBorderBlue`, `AdjacencyBorderYellow`, `AdjacencyBorderPurple`
+- `SidebarBackground`, `SidebarSelectedItem`, `SidebarHoverItem`
+- `StatusBarBackground`, `StatusBarForeground`
+- `MarqueeLabelForeground`
 
-### Lot 1.7 - Move Resources
+### Lot 1.2 - MainWindow Shell with Sidebar Navigation
 
 | Item | Detail |
 |------|--------|
-| **Work** | Move `Resources/` directory to `NMSE.Lib/Resources/`. Update `NMSE.Lib.csproj` with Content/EmbeddedResource entries. Update `NMSE.csproj` to remove resource entries and instead rely on the runtime output from NMSE.Lib (resources copied to output on build). |
-| **Directories Moved** | `Resources/json/`, `Resources/icons/`, `Resources/images/`, `Resources/map/`, `Resources/ui/` |
-| **Embedded Resources** | `Resources/app/NMSE.ico`, `Resources/app/NMSGeoSans_Kerned.ttf` - stay in the UI project (app icon and embedded font are UI-specific) |
+| **Work** | Create `MainWindow.axaml` with the core layout: a left sidebar panel and a right content area. The sidebar contains a toggle button at the top (expand/collapse) and a vertical list of navigation items, one per panel. Each item has an icon and a label. When collapsed, only icons show. When expanded, icons + labels show. Clicking a sidebar item loads the corresponding panel into the content area. Content area uses deferred/lazy loading  - panels are created on first selection. |
+| **Sidebar Items** (15, matching current tabs) | Player, Exosuit, Multi-tools, Starships, Fleet, Exocraft, Companions, Bases & Storage, Discoveries, Milestones, Settlements, ByteBeats, Account Rewards, Export Settings, Raw JSON Editor |
+| **Sidebar Behaviour** | Toggle button at top switches between expanded (icon + label, ~220px wide) and collapsed (icon only, ~48px wide). State persisted in `AppConfig`. Smooth width transition via Avalonia animation. Selected item highlighted. Hover effect. |
+| **Files Created** | `NMSE/MainWindow.axaml`, `NMSE/MainWindow.axaml.cs`, `NMSE/UI/Sidebar/SidebarItem.cs` (data class for icon + label + panel factory) |
+| **Effort** | ~3-4 hours |
+| **User Testing** | App launches with sidebar showing 15 items. Toggle collapses/expands. Clicking an item shows placeholder text in content area. Sidebar state persists across restart. |
+| **Acceptance** | Sidebar navigation fully functional with expand/collapse. Dark theme applied. Placeholder content loads for each item. |
+
+#### Sidebar Layout Sketch
+
+```
++--------------------------------------------------------------+
+| [Dir] [Slot] [File] [Load] [Save]     [Menu] [Theme] [?]    |
++------+-------------------------------------------------------+
+| [=]  |                                                       |
+|      |                                                       |
+| P    |                                                       |
+| E    |              Content Area                              |
+| M    |              (Selected Panel)                          |
+| S    |                                                       |
+| F    |                                                       |
+| X    |                                                       |
+| C    |                                                       |
+| B    |                                                       |
+| D    |                                                       |
+| Mi   |                                                       |
+| Se   |                                                       |
+| By   |                                                       |
+| R    |                                                       |
+| Ex   |                                                       |
+| {}   |                                                       |
+|      |                                                       |
++------+-------------------------------------------------------+
+| Status: Ready                              | DB Items: 1234 |
++--------------------------------------------------------------+
+```
+
+Expanded sidebar:
+```
++--------------------+
+| [=] NMSE           |
+|                    |
+| P  Player          |
+| E  Exosuit         |
+| M  Multi-tools     |
+| S  Starships       |
+| F  Fleet           |
+| X  Exocraft        |
+| C  Companions      |
+| B  Bases           |
+| D  Discoveries     |
+| Mi Milestones      |
+| Se Settlements     |
+| By ByteBeats       |
+| R  Rewards         |
+| Ex Export           |
+| {} Raw JSON        |
++--------------------+
+```
+
+> **Note:** Final icons will be SVG or PNG assets from `Resources/ui/icons/`, designed specifically for sidebar navigation. The icon set should be consistent with the game's aesthetic.
+
+### Lot 1.3 - Menu Bar, Toolbar & Status Bar
+
+| Item | Detail |
+|------|--------|
+| **Work** | Build the top toolbar area: directory browser combo, slot selector, file selector, Load/Save buttons. Build the menu bar (File, Edit, Language, Help). Build the status bar at the bottom. Port all keyboard shortcuts. Port the deferred panel loading system. Wire up `UiStrings` localisation. |
+| **WinForms -> Avalonia** | `MenuStrip` -> Avalonia `Menu`, `ToolStrip` -> custom `StackPanel`/`DockPanel` with Avalonia `Button`/`ComboBox`/`AutoCompleteBox`, `StatusStrip` -> `DockPanel` at bottom with `TextBlock` elements |
+| **Files Modified** | `MainWindow.axaml`, `MainWindow.axaml.cs` |
+| **Effort** | ~3-4 hours |
+| **User Testing** | Menu bar works. Toolbar combos populate with directories/slots/files. Load/Save cycle works. Status bar updates. Language switching works. |
+| **Acceptance** | Full menu structure, toolbar with combos, status bar, language switching. Save load/save cycle functional. |
+
+### Lot 1.4 - AvaloniaIconProvider Implementation
+
+| Item | Detail |
+|------|--------|
+| **Work** | Implement `icon loading interface` using `Avalonia.Media.Imaging.Bitmap` for icon loading, caching, and downscaling. Port the parallel preload logic from the WinForms `IconManager`. Avalonia's `Bitmap` can load from streams, making this straightforward. |
+| **Files Created** | `NMSE/UI/Util/AvaloniaIconProvider.cs` |
+| **Effort** | ~1-2 hours |
+| **Verification** | Unit test that loads an icon via AvaloniaIconProvider and verifies non-null return |
+| **Acceptance** | Icons load correctly from Resources/images/ using Avalonia types. Parallel preload completes without error. |
+
+### Lot 1.5 - FontManager Port
+
+| Item | Detail |
+|------|--------|
+| **Work** | Port `UI/Util/FontManager.cs` from `PrivateFontCollection` (GDI+) to Avalonia font loading. Avalonia supports `FontFamily` construction from embedded resources or file paths (e.g., `avares://NMSE/Resources/app/NMSGeoSans_Kerned.ttf#NMSGeoSans`). |
+| **Files Created** | `NMSE/UI/Util/FontManager.cs` (Avalonia version) |
 | **Effort** | ~1 hour |
-| **Verification** | Full build. Verify resource files appear in output directory. Run app to confirm icons, JSON databases, and localisation files load correctly. |
-| **Acceptance** | All resources load at runtime. App functions identically. Tests pass. |
+| **Acceptance** | NMSGeoSans font loads and can be applied to Avalonia `TextBlock` / `Label` elements. Heading styles use the custom font. |
 
-### Lot 1.8 - Update Test Projects
-
-| Item | Detail |
-|------|--------|
-| **Work** | Update `NMSE.Tests/NMSE.Tests.csproj` to replace all 60+ `<Compile Include="..\..\*.cs" Link="..." />` entries with a single `<ProjectReference Include="..\NMSE.Lib\NMSE.Lib.csproj" />`. Update `NMSE.Extractor.Tests` similarly if needed. |
-| **Files Modified** | `NMSE.Tests/NMSE.Tests.csproj`, potentially `NMSE.Extractor.Tests/NMSE.Extractor.Tests.csproj` |
-| **Effort** | ~1 hour |
-| **Verification** | `dotnet test NMSE.Tests/` (960 pass), `dotnet test NMSE.Extractor.Tests/` (178 pass) |
-| **Acceptance** | All 1,138 tests pass. No linked source files remain in test projects - they use ProjectReference instead. |
-
-### Lot 1.9 - Final Verification & Cleanup
+### Lot 1.6 - Utility Classes Port
 
 | Item | Detail |
 |------|--------|
-| **Work** | Final verification pass. Ensure: NMSE.Lib has no WinForms/System.Drawing references (except guarded). NMSE.csproj only contains UI/, Program.cs, and IconManager. Clean up any orphaned files. Update `Directory.Build.props` if needed for new project layout. Run full test suite. |
-| **Effort** | ~1 hour |
-| **Verification** | Full build, full test suite, manual inspection of project files |
-| **Acceptance** | Clean build, clean tests, no orphaned files, `NMSE.Lib.csproj` targets `net10.0` without `-windows` |
+| **Work** | Port `ItemPickerDialog.cs` (modal item selector) to an Avalonia `Window` (modal). Port filter, search, multi-select, shift-select fix logic. `ColorEmojiLabel.cs` (17 lines) becomes unnecessary  - Avalonia renders colour emoji natively via Skia/HarfBuzz. `RedrawHelper.cs` becomes unnecessary  - Avalonia's retained-mode rendering doesn't need manual paint suspension. |
+| **Files Created** | `NMSE/UI/Util/ItemPickerDialog.axaml`, `NMSE/UI/Util/ItemPickerDialog.axaml.cs` |
+| **Files Not Needed** | `ColorEmojiLabel` (native emoji), `RedrawHelper` (not applicable), `DoubleBufferedTabControl` (Avalonia has no flicker issue) |
+| **Effort** | ~2-3 hours |
+| **Acceptance** | Item picker launches as modal, search/filter works, multi-select with shift-click works, selected items returned correctly |
 
-### Phase 1 Summary
+### Lots 1.7-1.26 - Panel-by-Panel Implementation
 
-| Lot | Description | AI Effort | Cumulative |
-|-----|-------------|-----------|------------|
-| 1.1 | Lib project skeleton | 30 min | 30 min |
-| 1.2 | Move Models (20 files) | 1 hr | 1.5 hr |
-| 1.3 | Move Config (1 file) | 20 min | ~2 hr |
-| 1.4 | Move IO (12 files) | 30 min | ~2.5 hr |
-| 1.5 | Move Core (21 files) | 30 min | ~3 hr |
-| 1.6 | Move Data + IconManager abstraction | 2–3 hr | ~5.5 hr |
-| 1.7 | Move Resources | 1 hr | ~6.5 hr |
-| 1.8 | Update test projects | 1 hr | ~7.5 hr |
-| 1.9 | Final verification & cleanup | 1 hr | **~8.5 hr** |
+Each WinForms panel is implemented as an Avalonia `UserControl`. Panels are ordered from simplest to most complex to build confidence and establish patterns early.
 
-**Phase 1 Total: ~8.5 hours across ~9 lots**
-
-**Invariant after every lot:** `dotnet build` succeeds, all tests pass, app runs correctly.
-
----
-
-## 5. Phase 2 - Eto.Forms UI Conversion
-
-**Goal:** Replace the WinForms UI layer entirely with Eto.Forms, producing a single cross-platform application.
-
-**Branch:** `eto-forms` (branched from `main` after Phase 1 is merged)
-
-**Approach:** The Eto.Forms project replaces the WinForms project entirely. There is no period where both coexist - the branch is the Eto.Forms version, and `main` remains WinForms until the branch is merged.
-
-### Lot 2.1 - Eto.Forms Project Setup
-
-| Item | Detail |
-|------|--------|
-| **Work** | Create new `NMSE/NMSE.csproj` (replaces old WinForms csproj) targeting `net10.0` with Eto.Forms NuGet packages. Set up platform-specific launcher projects or conditional platform handlers. Create `Program.cs` with Eto.Forms `Application` entry point. |
-| **NuGet Packages** | `Eto.Forms` (core), `Eto.Platform.Wpf` or `Eto.Platform.WinForms` (Windows), `Eto.Platform.Gtk` (Linux), `Eto.Platform.Mac64` (macOS) |
-| **Files Created** | `NMSE/NMSE.csproj`, `NMSE/Program.cs` |
-| **Effort** | ~1–2 hours |
-| **User Testing** | `dotnet build` succeeds. `dotnet run` opens an empty Eto.Forms window on Windows. |
-| **Acceptance** | Empty Eto.Forms app launches on Windows with correct platform backend |
-
-### Lot 2.2 - EtoIconProvider Implementation
-
-| Item | Detail |
-|------|--------|
-| **Work** | Implement `IIconProvider` using `Eto.Drawing.Bitmap` for icon loading, caching, and downscaling. Port the parallel preload logic from the WinForms `IconManager`. |
-| **Files Created** | `NMSE/UI/Util/EtoIconProvider.cs` |
-| **Effort** | ~1–2 hours |
-| **Verification** | Unit test that loads an icon via EtoIconProvider and verifies non-null return |
-| **Acceptance** | Icons load correctly from Resources/images/ using Eto.Drawing types |
-
-### Lot 2.3 - FontManager Port
-
-| Item | Detail |
-|------|--------|
-| **Work** | Port `UI/Util/FontManager.cs` from `PrivateFontCollection` (GDI+) to Eto.Forms font loading. Eto supports loading fonts from files/streams via `Eto.Drawing.Font`. |
-| **Files Created** | `NMSE/UI/Util/FontManager.cs` (Eto.Forms version) |
-| **Effort** | ~1 hour |
-| **Acceptance** | NMSGeoSans font loads and can be applied to Eto.Forms Labels |
-
-### Lot 2.4 - MainForm Shell (Menu, Toolbar, Tabs, Status)
-
-| Item | Detail |
-|------|--------|
-| **Work** | Translate `UI/MainForm.cs` (1,882 lines) to Eto.Forms. This is the application shell: MenuBar, ToolBar (buttons + combos for directory/slot/file), TabControl with 20 TabPages, and a status bar. At this stage, tabs contain placeholder "Panel Name - TODO" labels. |
-| **WinForms -> Eto Translations** | `MenuStrip` -> `MenuBar`, `ToolStrip` -> `ToolBar`, `TabControl` -> `TabControl`, `StatusStrip` -> custom `TableLayout` at bottom, `ToolStripComboBox` -> `DropDown` in toolbar |
-| **Localisation** | Wire up `UiStrings` calls - the localisation system (`Data/UiStrings.cs`) is in NMSE.Lib and is framework-agnostic. `ApplyUiLocalisation()` translates directly. |
-| **Files Created** | `NMSE/UI/MainForm.cs` |
-| **Effort** | ~3–4 hours |
-| **User Testing** | App launches, menus render, tabs show placeholders, status bar shows "Ready", localisation can be changed via menu |
-| **Acceptance** | Full menu structure, toolbar with combos, 20 named tabs, status bar, language switching works |
-
-### Lot 2.5 - Save Load/Save Infrastructure
-
-| Item | Detail |
-|------|--------|
-| **Work** | Wire up the directory combo, slot combo, file combo, Load button, Save button to `SaveFileManager`, `SaveSlotManager`, `ContainersIndexManager`, etc. Port the file dialog calls (`OpenFileDialog`, `SaveFileDialog`) to Eto equivalents. Port the deferred panel loading system. |
-| **Effort** | ~2–3 hours |
-| **User Testing** | Can browse to a save directory, select a slot, load a save file, see status update. Save button enables after load. |
-| **Acceptance** | Full save load/save cycle works. JSON data is available for panels to consume. |
-
-### Lot 2.6 - Utility Classes Port
-
-| Item | Detail |
-|------|--------|
-| **Work** | Port `ItemPickerDialog.cs` (modal item selector) and `RedrawHelper.cs` (paint suspension) to Eto.Forms. `ColorEmojiLabel.cs` (17 lines) becomes unnecessary - Eto/GTK/Cocoa all render color emoji natively. Port `DoubleBufferedTabControl` if needed (Eto.Forms TabControl may already handle flicker). |
-| **Files Created** | `NMSE/UI/Util/ItemPickerDialog.cs`, `NMSE/UI/Util/RedrawHelper.cs` (if needed) |
-| **Effort** | ~1–2 hours |
-| **Acceptance** | Item picker launches, search works, item selection works |
-
-### Lots 2.7–2.26 - Panel-by-Panel Translation
-
-Each WinForms panel is translated to an Eto.Forms equivalent. Panels are ordered from simplest to most complex to build confidence and establish patterns early.
-
-#### Translation Pattern
+#### Implementation Pattern
 
 For each panel:
-1. Create `NMSE/UI/Panels/{PanelName}.cs` using Eto.Forms controls
-2. Translate the WinForms `.Designer.cs` layout code to Eto layout (using `TableLayout`, `StackLayout`, `DynamicLayout`, etc.)
-3. Translate the `.cs` event handlers - most calls to `*Logic` classes are unchanged
-4. Wire up `ApplyUiLocalisation()` using `UiStrings.Get()`
-5. Connect to the `IIconProvider` where icons are displayed
+1. Create `NMSE/UI/Views/{PanelName}View.axaml` with Avalonia layout (using `Grid`, `StackPanel`, `DockPanel`, `TabControl`, etc.)
+2. Create `NMSE/UI/Views/{PanelName}View.axaml.cs` with code-behind event handlers  - most calls to `*Logic` classes are unchanged
+3. Wire up `ApplyUiLocalisation()` using `UiStrings.Get()`  - the localisation system is and is framework-agnostic
+4. Connect icon loading where icons are displayed (using `Image` control with Avalonia `Bitmap`)
+5. Ensure all buttons, fields, combos, grids, checkboxes, tooltips, and context menus from the WinForms version are present and functional
+
+#### Critical Parity Requirements
+
+The following features **must** be present in every panel where they exist in the WinForms version:
+
+- All **buttons** (Add, Remove, Export, Import, Resize, Delete, Generate, Learn, Unlearn, Travel, Apply, etc.)
+- All **text fields** and **numeric fields** with the same validation/formatting
+- All **combo boxes** (drop-downs) with the same items and selection behaviour
+- All **data grids** with the same columns, sorting, editing, and cell formatting
+- All **checkboxes** and their change handlers
+- All **tooltips** on controls
+- All **context menus** on grids and cells
+- All **sub-tabs** within panels (BasePanel has 3, FreighterPanel has 2-3, DiscoveryPanel has 6, etc.)
+- All **localised strings** via `UiStrings.Get()`
+- All **Export/Import** functionality for lists and configurations
 
 #### Panel Order and Effort Estimates
 
-| Lot | Panel | WinForms Lines (code + designer) | Complexity | AI Effort |
-|-----|-------|----------------------------------|------------|-----------|
-| 2.7 | **FleetPanel** | 68 + 59 = 127 | Trivial (container for 3 sub-panels) | 30 min |
-| 2.8 | **ExosuitPanel** | 68 + 123 = 191 | Simple | 30 min |
-| 2.9 | **RecipePanel** | 158 + 127 = 285 | Simple (read-only display) | 45 min |
-| 2.10 | **AccountPanel** | 378 + 518 = 896 | Simple–Medium | 1 hr |
-| 2.11 | **MilestonePanel** | 225 + 163 = 388 | Simple | 45 min |
-| 2.12 | **ExocraftPanel** | 428 + 261 = 689 | Medium | 1.5 hr |
-| 2.13 | **ByteBeatPanel** | 361 + 295 = 656 | Medium | 1.5 hr |
-| 2.14 | **MultitoolPanel** | 473 + 239 = 712 | Medium (inventory grid use) | 2 hr |
-| 2.15 | **FreighterPanel** | 359 + 693 = 1,052 | Medium (many controls) | 2 hr |
-| 2.16 | **ExportConfigPanel** | 282 + 278 = 560 | Medium | 1.5 hr |
-| 2.17 | **SquadronPanel** | 392 + 231 = 623 | Medium | 1.5 hr |
-| 2.18 | **StarshipPanel** | 899 + 313 = 1,212 | Medium–Hard | 2.5 hr |
-| 2.19 | **FrigatePanel** | 735 + 695 = 1,430 | Medium–Hard | 2.5 hr |
-| 2.20 | **SettlementPanel** | 686 + 341 = 1,027 | Medium | 2 hr |
-| 2.21 | **MainStatsPanel** | 1,178 + 674 = 1,852 | Hard (many combos, grids, sections) | 3–4 hr |
-| 2.22 | **RawJsonPanel** | 929 + 192 = 1,121 | Medium–Hard (tree view + editing) | 2.5 hr |
-| 2.23 | **CompanionPanel** | 1,020 + 511 = 1,531 | Hard (complex data + images) | 3 hr |
-| 2.24 | **DiscoveryPanel** | 1,520 + 552 = 2,072 | Hard (tabs within tab, tree views, galaxy map) | 3–4 hr |
-| 2.25 | **BasePanel** | 1,412 + 81 = 1,493 | Hard (dynamic layouts, scrolling) | 3 hr |
-| 2.26 | **InventoryGridPanel** | 3,115 + 432 = 3,547 | **Very Hard** (custom rendering, SlotCell, adjacency borders, marquee labels, context menus) | 5–8 hr |
+| Lot | Panel | WinForms Lines | Complexity | Effort |
+|-----|-------|----------------|------------|--------|
+| 1.7 | **FleetPanel** | 127 | Trivial (container for 3 sub-panels) | 30 min |
+| 1.8 | **ExosuitPanel** | 191 | Simple (inventory grid host) | 45 min |
+| 1.9 | **RecipePanel** | 285 | Simple (read-only DataGrid + filter + search) | 1 hr |
+| 1.10 | **MilestonePanel** | 388 | Simple (grids with checkboxes) | 1 hr |
+| 1.11 | **AccountPanel** | 896 | Simple-Medium (reward grids, unlock buttons) | 1.5 hr |
+| 1.12 | **ExportConfigPanel** | 577 | Medium (checkboxes, file paths, options) | 1.5 hr |
+| 1.13 | **ExocraftPanel** | 693 | Medium (vehicle selector + inventory grids) | 2 hr |
+| 1.14 | **ByteBeatPanel** | 662 | Medium (byte beat library grid + controls) | 2 hr |
+| 1.15 | **SquadronPanel** | 623 | Medium (pilot details + inventory grid) | 2 hr |
+| 1.16 | **MultitoolPanel** | 714 | Medium (selector + details + inventory grid) | 2 hr |
+| 1.17 | **FreighterPanel** | 1,053 | Medium-Hard (details + 2 inventory grids + rooms) | 3 hr |
+| 1.18 | **StarshipPanel** | 1,213 | Medium-Hard (selector + details + inventory grids) | 3 hr |
+| 1.19 | **FrigatePanel** | 1,438 | Medium-Hard (fleet list + details + seed gen) | 3 hr |
+| 1.20 | **SettlementPanel** | 1,065 | Medium (3-column layout, 18 perk slots, decision) | 2.5 hr |
+| 1.21 | **MainStatsPanel** | 1,852 | Hard (many combos, grids, coordinates, portal glyphs, guides, titles) | 4-5 hr |
+| 1.22 | **RawJsonPanel** | 1,135 | Medium-Hard (tree view + text editor + search + validation) | 3 hr |
+| 1.23 | **CompanionPanel** | 1,552 | Hard (complex data, images, descriptors, mood/trust/scale sliders) | 3-4 hr |
+| 1.24 | **BasePanel** | 1,602 | Hard (3 sub-panels: BasesSubPanel, ChestsSubPanel, StorageSubPanel; NPC management; lazy-loaded grids) | 4-5 hr |
+| 1.25 | **DiscoveryPanel** | 2,268 | Hard (6 internal tabs: Technologies, Products, Words, Glyphs, Locations, Fish; race icons; tree views) | 4-5 hr |
+| 1.26 | **InventoryGridPanel** | 3,926 | **Very Hard** (custom SlotCell rendering, adjacency borders, MarqueeLabel, context menus, drag-to-move, supercharged slots, 14+ instances across app) | 8-12 hr |
 
-**Panel Translation Total: ~38–44 hours**
+**Panel Implementation Total: ~52-62 hours**
 
-#### InventoryGridPanel - Special Considerations (Lot 2.26)
+#### InventoryGridPanel - Special Considerations (Lot 1.26)
 
-This is the hardest panel to port. The WinForms version uses:
+This is by far the hardest panel to implement. The WinForms version (~3,926 lines) uses:
 
-- **Custom `SlotCell` inner class** (extending `Panel`) with custom `Paint` handlers
-- **GDI+ rendering** (`Graphics.DrawImage`, `Graphics.DrawString`, `GraphicsPath` for badge shapes)
-- **`MarqueeLabel`** (custom scrolling text label)
-- **Adjacency border overlay** (`OnPaintBackground`)
-- **Context menus** per cell
-- **Drag-select** across cells
+- **Custom `SlotCell` inner class** (~459 lines, extends `Panel`) with custom `Paint` handlers rendering 5 visual elements per cell:
+  1. **Item icon** - the item's image from the database, downscaled to fit the cell
+  2. **Marquee label** - a scrolling text label for long item names that animates via timer
+  3. **Amount display** - formatted counts (e.g. "250/250") with colour coding (full = green, partial = yellow, empty = grey)
+  4. **Class mini icon** - for technology/upgrade items, shows C/B/A/S class badge
+  5. **Element badge** - element symbol overlay
+- **`MarqueeLabel`** (~89 lines) - custom scrolling text control for long item names
+- **Adjacency border overlay** - colour-coded borders drawn over cells based on `TechAdjacencyDatabase` calculations (green, blue, yellow, purple gradients)
+- **Context menus** per cell - Add Item, Remove, Move, Copy, technology operations
+- **Drag-to-move** - drag a slot to move it to another position; Ctrl+drag to duplicate the item into the target slot
+- **Supercharged slot support** - slots can be toggled as supercharged (gold highlight with lightning bolt indicator), with per-inventory constraints (max slots, max row)
+- **Cell colouring by item type:**
+  - Technology = blue (40, 60, 120)
+  - Product = orange (120, 80, 30)
+  - Substance = teal (30, 100, 100)
+  - Supercharged = gold
+  - Selected = blue highlight (80, 120, 200)
+  - Non-activated = red tint overlay
+- **14+ instances** across the app - used by ExosuitPanel, MultitoolPanel, StarshipPanel, FreighterPanel (x2), ExocraftPanel, CompanionPanel, SquadronPanel, BasePanel's ChestsSubPanel (x10), StorageSubPanel (x2+)
 
-The Eto.Forms approach:
-- Use `Drawable` for the entire grid (custom painting via `Drawable.Paint` event)
-- Eto's `Graphics` class provides `DrawImage()`, `DrawText()`, `DrawRectangle()`, `FillPath()` equivalents
-- MarqueeLabel -> custom animation or static truncated text
-- Context menus -> Eto `ContextMenu`
-- Mouse tracking -> `Drawable.MouseDown`, `Drawable.MouseMove`, `Drawable.MouseUp` events
+The Avalonia approach:
 
-### Lot 2.27 - CoordinateHelper Glyph Rendering (Eto.Forms)
+| WinForms Feature | Avalonia Equivalent |
+|------------------|---------------------|
+| `SlotCell : Panel` with custom `Paint` | Custom `UserControl` with `DrawingPresenter` or custom `Render()` override using Skia |
+| GDI+ `Graphics.DrawImage/DrawString` | `DrawingContext.DrawImage()`, `DrawingContext.DrawText()` using `FormattedText` |
+| `MarqueeLabel` (timer-based scroll) | Custom control with `DispatcherTimer` + `RenderTransform` translation animation, or Avalonia `Animation` on `TranslateTransform` |
+| Adjacency border colours | `Border` control with `BorderBrush` bound to computed colour, or painted in `Render()` |
+| Context menus | Avalonia `ContextMenu` with `MenuItem` items |
+| Drag-to-move / Ctrl+drag-to-duplicate | `PointerPressed`, `PointerMoved`, `PointerReleased` with keyboard modifier detection |
+| Supercharged slot toggle | Gold `Background` + lightning bolt overlay, constraint logic unchanged |
+| `ToolTip` per cell | `ToolTip.Tip` attached property on each SlotCell |
+
+**Recommendation:** Split Lot 1.26 into sub-lots if needed:
+- 1.26a - SlotCell custom control (icon, name, amount, class mini icon, element badge rendering) (~3-4 hr)
+- 1.26b - MarqueeLabel control (scrolling animation) (~1-2 hr)
+- 1.26c - Adjacency border system (~2-3 hr)
+- 1.26d - Grid container (layout, selection, context menus, drag-to-move, supercharged slots, resize) (~2-3 hr)
+
+### Lot 1.27 - CoordinateHelper Glyph Rendering (Avalonia)
 
 | Item | Detail |
 |------|--------|
-| **Work** | Create Eto.Forms equivalent of the `#if WINFORMS` block in `CoordinateHelper.cs`. The shared lib keeps the coordinate math; the UI project provides glyph panel creation using Eto controls. |
-| **Files Created** | `NMSE/UI/Util/GlyphRenderer.cs` (Eto.Forms glyph panel) |
+| **Work** | Create Avalonia equivalent of the `#if WINFORMS` block in `CoordinateHelper.cs`. The shared lib keeps the coordinate math; the UI project provides glyph panel creation using Avalonia controls. Portal glyph images render as `Image` controls in a horizontal `StackPanel`. |
+| **Files Created** | `NMSE/UI/Controls/GlyphRenderer.axaml`, `NMSE/UI/Controls/GlyphRenderer.axaml.cs` |
+| **Effort** | ~1-2 hours |
+| **Acceptance** | Portal glyph images render correctly in the MainStatsPanel coordinate display |
+
+### Lot 1.28 - Full Localisation Pass
+
+| Item | Detail |
+|------|--------|
+| **Work** | Verify all 16 languages work correctly across all panels. Ensure `ApplyUiLocalisation()` is called on every view when language changes. Verify that the sidebar item labels, menu items, toolbar labels, and status bar all update. Verify right-to-left text doesn't break layout (if applicable in future). |
+| **Effort** | ~2-3 hours |
+| **Acceptance** | All 16 languages display correctly. Language switching updates every visible string. No truncated or missing labels. |
+
+### Lot 1.29 - Integration Testing & Parity Verification
+
+| Item | Detail |
+|------|--------|
+| **Work** | Comprehensive testing pass: |
+| | 1. Load a save file -> navigate all 15 sidebar items -> verify each panel displays data correctly |
+| | 2. Edit values in every panel -> save -> reload -> verify changes persisted |
+| | 3. Test all inventory grid operations: click, right-click, context menu, add item, remove item, move item, resize grid |
+| | 4. Verify marquee labels scroll for long item names |
+| | 5. Verify adjacency border colours appear correctly for tech items |
+| | 6. Test Export/Import on every panel that supports it |
+| | 7. Test theme switching (dark <-> light)  - all panels render correctly in both themes |
+| | 8. Test sidebar collapse/expand  - content area resizes correctly |
+| | 9. Test on Windows. If Linux/macOS available, test there too. |
+| | 10. Create a **parity checklist** documenting every feature from the WinForms version and its status in Avalonia. |
+| **Effort** | ~3-4 hours |
+| **User Testing** | Full manual testing on all available platforms |
+| **Acceptance** | Feature parity with WinForms version confirmed. All 15 panels load and function. All inventory grid features work. Dark/light themes work. Sidebar works. Localisation works. Save/load cycle works. |
+
+### Phase 1 Summary
+
+| Category | Lots | Effort |
+|----------|------|--------|
+| Project setup, theme & sidebar | 2.1-2.3 | ~8-11 hr |
+| Infrastructure (icons, fonts, utils) | 2.4-2.6 | ~4-6 hr |
+| Simple panels (4) | 2.7-2.10 | ~3.25 hr |
+| Simple-Medium panels (3) | 2.11-2.13 | ~5 hr |
+| Medium panels (4) | 2.14-2.17 | ~10 hr |
+| Medium-Hard panels (3) | 2.18-2.20 | ~8.5 hr |
+| Hard panels (4) | 2.21-2.25 | ~15.5-19.5 hr |
+| InventoryGridPanel (Very Hard) | 1.26 | ~8-12 hr |
+| Glyph rendering | 1.27 | ~1-2 hr |
+| Localisation pass | 1.28 | ~2-3 hr |
+| Integration testing | 1.29 | ~3-4 hr |
+| **Phase 2 Total** | **29 lots** | **~68-82 hours** |
+
+---
+
+## 5. Phase 2 - Polish, Packaging & Release
+
+**Goal:** Prepare the Avalonia application for release. Cross-platform packaging, documentation, and final polish.
+
+**Branch:** `avalonia` (continues from Phase 1, then merged into `experimental`, then into `main`)
+
+### Lot 2.1 - Cross-Platform Publishing Profiles
+
+| Item | Detail |
+|------|--------|
+| **Work** | Set up `dotnet publish` profiles for: Windows x64, Linux x64, macOS x64, macOS ARM64 (Apple Silicon). Create publish scripts. Avalonia apps publish as standard .NET applications  - no platform-specific backends needed (unlike Eto.Forms). |
+| **Deliverables** | Publish profiles in `NMSE/Properties/PublishProfiles/`, build scripts |
+| **Publish Commands** | See [Appendix C](#appendix-c--avalonia-dependencies--platform-support) |
+| **Effort** | ~2 hours |
+| **Acceptance** | `dotnet publish` for all four targets produces working executables |
+
+### Lot 2.2 - Linux Packaging
+
+| Item | Detail |
+|------|--------|
+| **Work** | Create a `.desktop` file, icon, and AppImage build script. No GTK dependency (Avalonia is self-contained). Create a Flatpak manifest if desired. |
+| **Deliverables** | `scripts/linux/nmse.desktop`, `scripts/linux/build-appimage.sh`, `docs/linux-install.md` |
+| **Effort** | ~2 hours |
+| **Acceptance** | AppImage runs on Ubuntu 22.04+ / Fedora 38+. No external dependencies needed (Avalonia bundles Skia). |
+
+### Lot 2.3 - macOS Packaging
+
+| Item | Detail |
+|------|--------|
+| **Work** | Create a `.app` bundle structure, `Info.plist`, icon set (`.icns`). Avalonia apps on macOS are self-contained  - no Mono or Cocoa dependencies. Create a DMG build script if desired. |
+| **Deliverables** | `scripts/macos/`, `docs/macos-install.md` |
+| **Effort** | ~2 hours |
+| **Acceptance** | `.app` bundle launches on macOS Intel and Apple Silicon. No external dependencies. |
+
+### Lot 2.4 - Windows Packaging Update
+
+| Item | Detail |
+|------|--------|
+| **Work** | Update the existing Windows publish/zip workflow for the Avalonia project structure. Ensure ReadyToRun, build versioning, and zip packaging still work. |
 | **Effort** | ~1 hour |
-| **Acceptance** | Portal glyph images render correctly in the coordinate display |
+| **Acceptance** | Windows build produces a zip with the same distribution structure as current releases |
 
-### Lot 2.28 - Integration Testing
+### Lot 2.5 - Documentation Update
 
 | Item | Detail |
 |------|--------|
-| **Work** | Full integration test: load a save, navigate all 20 tabs, verify data displays correctly, edit values, save, reload, verify changes persisted. Test all 16 localisation languages. Test inventory grid interactions (click, right-click, context menu, add item, remove item). |
-| **Effort** | ~2–3 hours |
-| **User Testing** | Full manual testing on Windows. If Linux/macOS is available, test there too. |
-| **Acceptance** | Feature parity with WinForms version. All 20 panels load and function. Localisation works. Save/load cycle works. |
+| **Work** | Update README.md with cross-platform install instructions for Windows, Linux, macOS. Update architecture docs. Deprecate Wine guides (native app now available). Update CONTRIBUTING.md with Avalonia development setup (recommend Rider or VS with Avalonia extension). Add sidebar navigation and theme switching to user guide. |
+| **Effort** | ~2-3 hours |
+| **Acceptance** | Documentation reflects new architecture, new UI, and new platform support |
+
+### Lot 2.6 - Merge Strategy
+
+| Item | Detail |
+|------|--------|
+| **Work** | Merge `avalonia` branch into a new `experimental` branch. Allow broader testing by multiple developers. Collect feedback, fix issues. When all developers are satisfied, merge `experimental` into `main`. Tag release. |
+| **Merge Path** | `avalonia` -> `experimental` (broader testing) -> `main` (release) |
+| **Effort** | ~2-3 hours (including conflict resolution and final verification) |
+| **Acceptance** | `main` now contains the Avalonia application. WinForms code is fully removed. All platforms work. |
 
 ### Phase 2 Summary
 
-| Category | Lots | AI Effort |
-|----------|------|-----------|
-| Project setup + infrastructure | 2.1–2.6 | ~9–14 hr |
-| Simple panels (5) | 2.7–2.11 | ~3.5 hr |
-| Medium panels (7) | 2.12–2.18 | ~12.5 hr |
-| Hard panels (5) | 2.19–2.25 | ~17 hr |
-| InventoryGridPanel (Very Hard) | 2.26 | ~5–8 hr |
-| Glyph rendering | 2.27 | ~1 hr |
-| Integration testing | 2.28 | ~2–3 hr |
-| **Phase 2 Total** | **28 lots** | **~50–60 hours** |
+| Lot | Description | Effort |
+|-----|-------------|--------|
+| 2.1 | Publish profiles | 2 hr |
+| 2.2 | Linux packaging | 2 hr |
+| 2.3 | macOS packaging | 2 hr |
+| 2.4 | Windows packaging | 1 hr |
+| 2.5 | Documentation | 2-3 hr |
+| 2.6 | Merge strategy | 2-3 hr |
+| **Phase 3 Total** | | **~11-13 hours** |
 
 ---
 
-## 6. Phase 3 - Polish, Packaging & Release
-
-**Goal:** Prepare the Eto.Forms application for release. Cross-platform packaging, documentation, and final polish.
-
-**Branch:** `eto-forms` (continues from Phase 2, then merge to `main`)
-
-### Lot 3.1 - Cross-Platform Publishing Profiles
-
-| Item | Detail |
-|------|--------|
-| **Work** | Set up `dotnet publish` profiles for: Windows x64, Linux x64, macOS x64, macOS ARM64 (Apple Silicon). Create publish scripts/CI configuration. |
-| **Deliverables** | Publish profiles in `NMSE/Properties/PublishProfiles/`, build scripts |
-| **Effort** | ~2 hours |
-| **Acceptance** | `dotnet publish -r win-x64`, `linux-x64`, `osx-x64`, `osx-arm64` all produce working executables |
-
-### Lot 3.2 - Linux Packaging
-
-| Item | Detail |
-|------|--------|
-| **Work** | Create a `.desktop` file, icon, and AppImage build script. Document GTK3 dependency. Create a Flatpak manifest if desired. |
-| **Deliverables** | `scripts/linux/nmse.desktop`, `scripts/linux/build-appimage.sh`, `docs/linux-install.md` |
-| **Effort** | ~2 hours |
-| **Acceptance** | AppImage runs on Ubuntu 22.04+ / Fedora 38+. GTK dependency documented. |
-
-### Lot 3.3 - macOS Packaging
-
-| Item | Detail |
-|------|--------|
-| **Work** | Create a `.app` bundle structure, `Info.plist`, icon set. Document Mono/Cocoa dependencies. Create a DMG build script if desired. |
-| **Deliverables** | `scripts/macos/`, `docs/macos-install.md` |
-| **Effort** | ~2 hours |
-| **Acceptance** | `.app` bundle launches on macOS. Dependencies documented. |
-
-### Lot 3.4 - Windows Packaging Update
-
-| Item | Detail |
-|------|--------|
-| **Work** | Update the existing Windows publish/zip workflow for the new Eto.Forms project structure. Ensure the ReadyToRun, build versioning, and zip packaging still work. |
-| **Effort** | ~1 hour |
-| **Acceptance** | Windows build produces a zip identical in structure to current releases |
-
-### Lot 3.5 - Documentation Update
-
-| Item | Detail |
-|------|--------|
-| **Work** | Update README.md with cross-platform install instructions. Update architecture docs. Deprecate Wine guides (native app now available). Update CONTRIBUTING.md with Eto.Forms development setup. |
-| **Effort** | ~1–2 hours |
-| **Acceptance** | Documentation reflects new architecture |
-
-### Lot 3.6 - Merge to Main
-
-| Item | Detail |
-|------|--------|
-| **Work** | Final review of `eto-forms` branch. Resolve any merge conflicts with `main`. Create PR, review, merge. Tag release. |
-| **Effort** | ~1 hour |
-| **Acceptance** | `main` now contains the Eto.Forms application. WinForms code is fully removed. |
-
-### Phase 3 Summary
-
-| Lot | Description | AI Effort |
-|-----|-------------|-----------|
-| 3.1 | Publish profiles | 2 hr |
-| 3.2 | Linux packaging | 2 hr |
-| 3.3 | macOS packaging | 2 hr |
-| 3.4 | Windows packaging | 1 hr |
-| 3.5 | Documentation | 1–2 hr |
-| 3.6 | Merge to main | 1 hr |
-| **Phase 3 Total** | | **~9–10 hours** |
-
----
-
-## 7. Working Methodology
+## 6. Working Methodology
 
 ### Cadence
 
 ```
-Programmer: Produces Lot N -> commits to branch -> notifies user
-Maintainer: Tests Lot N -> provides feedback -> approves or requests changes
-Programmer: Addresses feedback (if any) -> moves to Lot N+1
+Developer:   Produces Lot N -> commits to branch -> notifies maintainer
+Maintainer:  Tests Lot N -> provides feedback -> approves or requests changes
+Developer:   Addresses feedback (if any) -> moves to Lot N+1
 ```
 
 ### What "Effort" Means
 
-The effort estimates represent the time an AI coding agent spends actively working on the lot, including:
+The effort estimates represent the time a developer spends actively working on the lot, including:
 - Reading/understanding existing code
-- Writing new code
+- Writing new code (AXAML layout + C# code-behind)
 - Running builds and tests
 - Fixing issues found during build/test
 - Committing and pushing
@@ -533,21 +539,21 @@ Estimates assume:
 - Single-session focus per lot
 - No external blockers
 - Clean build environment
-- Ability to reference the WinForms source and translate mechanically
+- Ability to reference the WinForms source and port functionality systematically
 
 ### Branching
 
 ```
 main
- │
- ├── Phase 0: Wine guides (docs only)
- ├── Phase 1: NMSE.Lib extraction (Lots 1.1–1.9)
- │     ↓ (merge each lot to main as verified)
- │
- └── eto-forms (branch from main after Phase 1)
-       ├── Phase 2: UI conversion (Lots 2.1–2.28)
-       ├── Phase 3: Polish & packaging (Lots 3.1–3.6)
-       └── -> merge to main when ready
+ |
+ +-- Phase 0: Wine guides (docs only) done
+ |
+ +-- avalonia (branch from main)
+       +-- Phase 1: UI implementation (Lots 1.1-1.29)
+       +-- Phase 2: Polish & packaging (Lots 2.1-2.6)
+       |
+       +-- -> merge to experimental (broader developer testing)
+             +-- -> merge to main (release, when all satisfied)
 ```
 
 ### Testing Gates
@@ -557,37 +563,41 @@ Every lot must pass before the next begins:
 | Gate | Criteria |
 |------|----------|
 | **Build gate** | `dotnet build` succeeds with 0 errors |
-| **Test gate** | All existing tests pass (960 + 178 = 1,138) |
+| **Test gate** | All existing tests pass (NMSE.Tests + NMSE.Extractor.Tests) |
 | **Smoke test** | App launches and basic functionality works |
-| **User approval** | User confirms the lot's deliverables |
+| **Parity check** | Panel has same buttons, fields, grids, and behaviour as WinForms version |
+| **Theme check** | Panel renders correctly in both Dark and Light themes |
+| **Developer approval** | Maintainer confirms the lot's deliverables |
 
 ### Rollback
 
-- Phase 1 (on `main`): Each lot is a separate commit. If a lot introduces a regression, `git revert` the commit.
-- Phase 2–3 (on `eto-forms`): The branch is independent. If the entire approach fails, `main` is unaffected.
+- **Phase 1-2** (on `avalonia`): The branch is independent. If the entire approach fails, `main` is unaffected.
+- **Experimental -> Main**: The `experimental` branch provides a buffer for broader testing before `main` is affected.
 
 ---
 
-## 8. Risk Register
+## 7. Risk Register
 
 | Risk | Probability | Impact | Mitigation |
 |------|-------------|--------|------------|
-| **Eto.Forms `Drawable` performance** - custom painting for InventoryGridPanel may be slow on GTK/Cocoa | Medium | High | Profile early in Lot 2.26. If too slow, consider bitmap caching (draw to offscreen bitmap, blit once). |
-| **Eto.Forms GTK3 rendering differences** - controls may look/behave differently on GTK vs WinForms | Medium | Medium | Test each lot on Linux (GTK) as well as Windows. Document platform-specific quirks. |
-| **Eto.Forms macOS Cocoa issues** - MonoMac bindings may have gaps for certain controls | Medium | Medium | Test on macOS early. If specific controls don't work, provide platform-specific fallbacks. |
-| **Embedded font loading** - `PrivateFontCollection` is Windows-only; Eto's cross-platform font loading may differ | Low | Low | Eto supports loading fonts from files. Fall back to system font if custom font loading fails. |
-| **Eto.Forms NuGet version stability** - library may have breaking changes | Low | Medium | Pin to a specific Eto.Forms version. Only upgrade deliberately. |
-| **Large merge conflict** - `eto-forms` branch diverges significantly from `main` | Medium | Medium | Keep `main` stable during Phase 2 (minimal changes). Rebase `eto-forms` regularly. |
-| **GTK dependency on Linux** - users may not have GTK3+ installed | Low | Low | Document dependency. Consider AppImage bundling. Most modern Linux desktops include GTK3. |
-| **Test project adaptation** - some tests may depend on WinForms types indirectly | Low | Low | Tests currently target `net10.0` (not windows) and link source files. After Lot 1.8, they use ProjectReference to NMSE.Lib which has no WinForms types. |
-| **InventoryGridPanel complexity** - this panel is 3,547 lines of complex custom rendering | High | High | Dedicate the most time to this lot (5–8 hours). Consider splitting into sub-lots if needed. |
-| **Clipboard operations** - WinForms `Clipboard` class may not translate directly | Low | Low | Eto has `Clipboard` support. Test copy/paste operations on all platforms. |
+| **InventoryGridPanel complexity**  - 3,926 lines of custom rendering with SlotCell, MarqueeLabel, adjacency borders | High | High | Dedicate the most time (8-12 hr). Split into sub-lots. Build SlotCell and MarqueeLabel as standalone testable controls first. |
+| **Avalonia DataGrid feature gaps**  - `Avalonia.Controls.DataGrid` may lack some `DataGridView` features (e.g., checkbox columns, image columns, custom cell painting) | Medium | Medium | Audit all DataGrid usage early (Lot 2.9). For missing features, use `DataGridTemplateColumn` with custom cell templates. Avalonia DataGrid supports this well. |
+| **Custom Skia rendering performance**  - SlotCell rendering (icon + text + badge + border) across 14+ grids with 100+ cells each | Medium | Medium | Profile early. Use `RenderTargetBitmap` caching if needed (render to bitmap, display bitmap). Avalonia's Skia backend is generally fast. |
+| **Sidebar navigation UX**  - users accustomed to tabs may find sidebar unfamiliar | Low | Low | Keep sidebar item order identical to current tab order. Provide keyboard shortcuts for panel switching. Consider tooltip on collapsed icons. |
+| **Theme switching edge cases**  - some custom colours (adjacency borders, cell backgrounds) may not update correctly when switching themes | Medium | Low | Define all colours as `DynamicResource` keys. Test both themes for every panel. |
+| **Avalonia font rendering**  - custom NMSGeoSans font may render differently from GDI+ (kerning, size, weight) | Low-Medium | Low | Test font rendering early (Lot 2.5). Avalonia uses HarfBuzz for text shaping, which is high-quality. Fine-tune font sizes if needed. |
+| **Cross-platform file dialogs**  - folder/file dialog behaviour may differ across platforms | Low | Low | Avalonia has cross-platform file dialog support. Test on each platform. |
+| **Large merge conflict**  - `avalonia` branch diverges significantly from `main` | Medium | Medium | Keep `main` stable during Phase 2 (minimal changes). Rebase `avalonia` regularly against `main`. |
+| **Clipboard operations**  - clipboard API may differ across platforms | Low | Low | Avalonia has cross-platform `Clipboard` support. Test copy/paste on all platforms. |
+| **NuGet package stability**  - Avalonia may have breaking changes between versions | Low | Medium | Pin to a specific Avalonia version (e.g., `11.x.x`). Only upgrade deliberately after testing. |
+| **macOS notarisation**  - Apple may require notarisation for .app bundles | Medium | Medium | Research and document notarisation process. May need Apple Developer account. Can defer to Phase 3 if needed. |
+| **Tree view differences**  - Avalonia `TreeView` data model differs from WinForms | Medium | Low | Use `TreeView` with `HierarchicalDataTemplate`. RawJsonPanel and DiscoveryPanel tree views will need model adaptation. |
 
 ---
 
 ## Appendix A - File Inventory
 
-### Files Moving to NMSE.Lib (Phase 1)
+### Source File Inventory
 
 #### Models/ (20 files, 2,708 lines)
 ```
@@ -630,7 +640,7 @@ StatHelper.cs (55)
 
 #### Data/ (24 files, 15,142 lines - 22 move as-is, 1 abstracted, 1 new interface)
 ```
-Moving as-is (22 files):
+22 files:
   BaseStatLimits.cs (200)      CompanionDatabase.cs (8,787)
   CoordinateHelper.cs (283)    ElementDatabase.cs (74)
   FrigateTraitDatabase.cs (159) GalaxyDatabase.cs (302)
@@ -644,200 +654,244 @@ Moving as-is (22 files):
   UiStrings.cs (220)           WikiGuideDatabase.cs (168)
   WordDatabase.cs (205)
 
-Stays in UI project (1 file):
-  IconManager.cs (178) - WinForms implementation of IIconProvider
+WinForms-specific (to be ported):
+  IconManager.cs (178)  - WinForms implementation of icon loading interface
 
-New in NMSE.Lib (1 file):
-  IIconProvider.cs (~20 lines) - platform-agnostic interface
+New in NMSE (1 file):
+  icon loading interface.cs (~20 lines)  - platform-agnostic interface
 ```
 
 #### Resources/ (~4,950 files)
 ```
-Moving to NMSE.Lib:
-  Resources/json/     (24 files - game databases)
-  Resources/json/lang/ (16 files - game localisation)
+  Resources/json/     (24 files  - game databases)
+  Resources/json/lang/ (16 files  - game localisation)
   Resources/icons/    (some icon files)
-  Resources/images/   (4,892 files - item icons)
-  Resources/map/      (1 file - galaxy map data)
-  Resources/ui/lang/  (16 files - UI localisation)
+  Resources/images/   (4,892 files  - item icons)
+  Resources/map/      (1 file  - galaxy map data)
+  Resources/ui/lang/  (16 files  - UI localisation)
 
 Staying in UI project:
-  Resources/app/NMSE.ico              (app icon - embedded)
-  Resources/app/NMSGeoSans_Kerned.ttf (custom font - embedded)
+  Resources/app/NMSE.ico              (app icon  - embedded)
+  Resources/app/NMSGeoSans_Kerned.ttf (custom font  - embedded)
 ```
 
-### Files Being Translated in Phase 2 (WinForms -> Eto.Forms)
+### Files Being Implemented in Phase 2 (WinForms -> Avalonia)
 
-#### MainForm (1 file -> 1 file)
+#### MainWindow (replaces MainForm)
 ```
-UI/MainForm.cs (1,882 lines) -> NMSE/UI/MainForm.cs
-UI/MainForm.Designer.cs (63 lines) -> (layout embedded in MainForm.cs)
-```
+WinForms:
+  UI/MainForm.cs (2,167 lines) + UI/MainForm.Designer.cs (63 lines) = 2,230 lines
 
-#### Panels (20 panels × 2 files each -> 20 new files)
-```
-Each panel: {Panel}.cs + {Panel}.Designer.cs -> single {Panel}.cs in Eto.Forms
-Total WinForms: 40 files, ~19,500 lines
-Expected Eto.Forms: 20 files, ~12,000–15,000 lines (designer code becomes more concise)
+Avalonia:
+  MainWindow.axaml + MainWindow.axaml.cs
+  UI/Sidebar/SidebarItem.cs
 ```
 
-#### Controls (1 file -> 0 files)
+#### Panel Views (20 panels -> 20 Avalonia UserControls)
 ```
-UI/Controls/ColorEmojiLabel.cs (17 lines) -> not needed (Eto/GTK/Cocoa render emoji natively)
+Each panel: {Panel}.cs + {Panel}.Designer.cs -> {PanelName}View.axaml + {PanelName}View.axaml.cs
+
+Total WinForms: 42 files, ~22,258 lines
+Expected Avalonia: ~40 files (20 .axaml + 20 .axaml.cs), ~16,000-20,000 lines
 ```
 
-#### Utilities (3 files -> 3 files)
+#### Controls
 ```
-UI/Util/FontManager.cs (103 lines) -> NMSE/UI/Util/FontManager.cs (Eto version)
-UI/Util/ItemPickerDialog.cs (154 lines) -> NMSE/UI/Util/ItemPickerDialog.cs (Eto version)
-UI/Util/RedrawHelper.cs (32 lines) -> NMSE/UI/Util/RedrawHelper.cs (if needed)
+WinForms custom controls -> Avalonia custom controls:
+
+  SlotCell (inner class, 459 lines)    -> NMSE/UI/Controls/SlotCell.axaml[.cs]
+  MarqueeLabel (inner class, 89 lines) -> NMSE/UI/Controls/MarqueeLabel.axaml[.cs]
+  ColorEmojiLabel (17 lines)           -> NOT NEEDED (Avalonia renders emoji natively)
+  DoubleBufferedTabControl             -> NOT NEEDED (Avalonia has no flicker issue)
 ```
 
-#### New Files
+#### Utilities
 ```
-NMSE/UI/Util/EtoIconProvider.cs - IIconProvider implementation using Eto.Drawing
-NMSE/UI/Util/GlyphRenderer.cs - Portal glyph rendering using Eto controls
-NMSE/Program.cs - Eto.Forms entry point
+WinForms:                             -> Avalonia:
+  UI/Util/FontManager.cs (103 lines)   -> NMSE/UI/Util/FontManager.cs
+  UI/Util/ItemPickerDialog.cs (197 l.)  -> NMSE/UI/Util/ItemPickerDialog.axaml[.cs]
+  UI/Util/RedrawHelper.cs (34 lines)    -> NOT NEEDED (retained-mode rendering)
+```
+
+#### New Files (Avalonia-specific)
+```
+NMSE/App.axaml + App.axaml.cs                - Avalonia Application definition + theme config
+NMSE/MainWindow.axaml + MainWindow.axaml.cs   - Main window with sidebar + content
+NMSE/UI/Sidebar/SidebarItem.cs                - Sidebar navigation item model
+NMSE/UI/Util/AvaloniaIconProvider.cs           - icon loading interface using Avalonia.Media.Imaging
+NMSE/UI/Controls/GlyphRenderer.axaml[.cs]     - Portal glyph rendering
+NMSE/UI/Themes/NmseTheme.axaml                - Shared theme resource dictionary
+NMSE/UI/Themes/NmseDarkOverrides.axaml         - Dark theme overrides
+NMSE/UI/Themes/NmseLightOverrides.axaml        - Light theme overrides
+NMSE/Program.cs                                - Avalonia entry point
 ```
 
 ---
 
-## Appendix B - WinForms -> Eto.Forms Control Map
+## Appendix B - WinForms -> Avalonia Control Map
 
 This is the detailed translation reference for Phase 2.
 
 ### Layout
 
-| WinForms | Eto.Forms | Notes |
-|----------|-----------|-------|
-| `Form` | `Form` | Nearly identical API |
-| `UserControl` | `Panel` | Eto `Panel` is the base container |
-| `Panel` | `Panel` / `Drawable` | Use `Drawable` for custom painting |
-| `FlowLayoutPanel` | `StackLayout` (with `Orientation.Horizontal` + wrapping) or `WrapPanel` | |
-| `TableLayoutPanel` | `TableLayout` | Similar concept |
-| `SplitContainer` | `Splitter` | Similar |
-| `GroupBox` | `GroupBox` | Identical concept |
-| `TabControl` + `TabPage` | `TabControl` + `TabPage` | Nearly identical |
-| `ScrollableControl` | `Scrollable` | Similar |
+| WinForms | Avalonia | Notes |
+|----------|----------|-------|
+| `Form` | `Window` | Avalonia uses `Window` for top-level windows |
+| `UserControl` | `UserControl` | Nearly identical concept |
+| `Panel` | `Panel` / `Border` / `Canvas` | `Panel` for simple container, `Border` for bordered content, `Canvas` for absolute positioning |
+| `FlowLayoutPanel` | `WrapPanel` / `StackPanel` | `WrapPanel` for wrapping flow, `StackPanel` for linear flow |
+| `TableLayoutPanel` | `Grid` (with RowDefinitions/ColumnDefinitions) | Avalonia `Grid` is more powerful and flexible |
+| `SplitContainer` | `SplitView` / `GridSplitter` in a `Grid` | `GridSplitter` for resizable split |
+| `GroupBox` | `HeaderedContentControl` or `Border` + `TextBlock` | No direct `GroupBox`; use styled `Border` with header |
+| `TabControl` + `TabPage` | `TabControl` + `TabItem` | Nearly identical concept |
+| `ScrollableControl` | `ScrollViewer` | Wraps content with scrollbars |
+| `DockPanel` (if used) | `DockPanel` | Identical concept |
 
 ### Common Controls
 
-| WinForms | Eto.Forms | Notes |
-|----------|-----------|-------|
-| `Label` | `Label` | Nearly identical |
+| WinForms | Avalonia | Notes |
+|----------|----------|-------|
+| `Label` | `TextBlock` | `TextBlock` for display-only text. `Label` exists but `TextBlock` is more common. |
 | `TextBox` | `TextBox` | Nearly identical |
 | `Button` | `Button` | Nearly identical |
 | `CheckBox` | `CheckBox` | Nearly identical |
-| `ComboBox` | `DropDown` (non-editable) / `ComboBox` (editable) | Different naming |
-| `NumericUpDown` | `NumericStepper` | Different naming |
+| `ComboBox` (DropDownList) | `ComboBox` | Nearly identical (non-editable by default) |
+| `ComboBox` (editable) | `AutoCompleteBox` or `ComboBox` with `IsEditable=true` | |
+| `NumericUpDown` | `NumericUpDown` | Nearly identical |
 | `RadioButton` | `RadioButton` | Nearly identical |
 | `ProgressBar` | `ProgressBar` | Nearly identical |
-| `PictureBox` | `ImageView` | Different naming |
-| `RichTextBox` | `RichTextArea` | Different naming |
-| `TreeView` | `TreeGridView` | Different data model |
-| `DataGridView` | `GridView` | Different data model - uses `IDataStore<T>` |
-| `ListView` | `GridView` (with columns) | Eto doesn't have a separate ListView |
-| `ToolTip` | `ToolTip` property on controls | Set via `control.ToolTip = "text"` |
+| `PictureBox` | `Image` (control) | `Image` control with `Source` property |
+| `RichTextBox` | `TextBox` with `AcceptsReturn=true` | Avalonia `TextBox` supports multi-line |
+| `TreeView` | `TreeView` | Uses `HierarchicalDataTemplate` for items |
+| `DataGridView` | `DataGrid` (from `Avalonia.Controls.DataGrid`) | Column-based with `DataGridTextColumn`, `DataGridCheckBoxColumn`, `DataGridTemplateColumn` |
+| `ListBox` | `ListBox` | Nearly identical |
+| `ToolTip` | `ToolTip.Tip` attached property | Set via `ToolTip.Tip="text"` on any control |
 
 ### Menus and Toolbars
 
-| WinForms | Eto.Forms | Notes |
-|----------|-----------|-------|
-| `MenuStrip` | `MenuBar` | |
-| `ToolStripMenuItem` | `ButtonMenuItem` / `SubMenuItem` | |
-| `ToolStripSeparator` | `SeparatorMenuItem` | |
-| `ToolStrip` | Custom `TableLayout` with `Button`s | Eto has no exact ToolStrip equivalent |
-| `ToolStripComboBox` | `DropDown` in a layout | |
-| `ToolStripButton` | `Button` in a layout | |
-| `StatusStrip` | Custom `TableLayout` docked to bottom | |
-| `ContextMenuStrip` | `ContextMenu` | |
+| WinForms | Avalonia | Notes |
+|----------|----------|-------|
+| `MenuStrip` | `Menu` (in `NativeMenu` or AXAML `Menu`) | |
+| `ToolStripMenuItem` | `MenuItem` | |
+| `ToolStripSeparator` | `Separator` | |
+| `ToolStrip` | Custom `StackPanel` with `Button`/`ComboBox` | No direct ToolStrip equivalent  - build with layout panels |
+| `ToolStripComboBox` | `ComboBox` in a layout panel | |
+| `ToolStripButton` | `Button` in a layout panel | |
+| `StatusStrip` | `DockPanel` docked to bottom with `TextBlock` elements | |
+| `ContextMenuStrip` | `ContextMenu` | Attached via `ContextMenu` property on controls |
 
 ### Dialogs
 
-| WinForms | Eto.Forms | Notes |
-|----------|-----------|-------|
-| `OpenFileDialog` | `OpenFileDialog` | Nearly identical API |
-| `SaveFileDialog` | `SaveFileDialog` | Nearly identical API |
-| `FolderBrowserDialog` | `SelectFolderDialog` | Different naming |
-| `MessageBox.Show()` | `MessageBox.Show()` | Nearly identical |
-| `ColorDialog` | `ColorDialog` | Nearly identical |
-| Custom dialog (`Form`) | `Dialog` | Eto has a dedicated `Dialog` class for modal dialogs |
+| WinForms | Avalonia | Notes |
+|----------|----------|-------|
+| `OpenFileDialog` | `OpenFileDialog` (from `Avalonia.Controls`) | API differs slightly  - uses `StorageProvider` on newer versions |
+| `SaveFileDialog` | `SaveFileDialog` | Similar |
+| `FolderBrowserDialog` | `OpenFolderDialog` | |
+| `MessageBox.Show()` | Custom dialog or community package | Avalonia has no built-in `MessageBox`. Use `Avalonia.MessageBox` community package or create a simple modal `Window`. |
+| Custom dialog (`Form`) | `Window` shown with `ShowDialog()` | |
 
-### Drawing / Custom Painting
+### Drawing / Custom Rendering
 
-| WinForms (GDI+) | Eto.Forms (Eto.Drawing) | Notes |
-|------------------|------------------------|-------|
-| `Graphics g` | `Graphics g` (from `PaintEventArgs`) | Same concept |
-| `g.DrawImage(img, x, y, w, h)` | `g.DrawImage(img, x, y, w, h)` | Nearly identical |
-| `g.DrawString(text, font, brush, x, y)` | `g.DrawText(font, color, x, y, text)` | Parameter order differs |
-| `g.FillRectangle(brush, rect)` | `g.FillRectangle(color, rect)` | Uses Color instead of Brush |
-| `g.DrawRectangle(pen, rect)` | `g.DrawRectangle(color, rect)` | Uses Color instead of Pen |
-| `GraphicsPath` | `GraphicsPath` | Similar (Eto has its own) |
-| `g.FillPath(brush, path)` | `g.FillPath(color, path)` | |
-| `SolidBrush(Color)` | Just use `Color` directly | Eto simplifies brush usage |
-| `Pen(Color, width)` | `Pen(Color, width)` or just `Color` with `g.DrawLine()` | |
-| `Bitmap(width, height)` | `new Bitmap(width, height, PixelFormat.Format32bppRgba)` | |
-| `Image.FromStream(stream)` | `new Bitmap(stream)` | |
-| `g.InterpolationMode = ...` | `g.ImageInterpolation = ...` | Enum differs |
-| `e.Graphics.MeasureString()` | `Font.MeasureString()` | Called on Font, not Graphics |
-| `StringFormat` | `FormattedText` (if needed) | |
+| WinForms (GDI+) | Avalonia (DrawingContext) | Notes |
+|------------------|--------------------------|-------|
+| `Graphics g` (from PaintEventArgs) | `DrawingContext` (from `Render()` override) | Obtained by overriding `public override void Render(DrawingContext context)` |
+| `g.DrawImage(img, rect)` | `context.DrawImage(bitmap, sourceRect, destRect)` | |
+| `g.DrawString(text, font, brush, x, y)` | `context.DrawText(formattedText, point)` | Use `FormattedText` object |
+| `g.FillRectangle(brush, rect)` | `context.FillRectangle(brush, rect)` | Uses `IBrush` (e.g., `SolidColorBrush`) |
+| `g.DrawRectangle(pen, rect)` | `context.DrawRectangle(brush, pen, rect)` | Uses `IPen` |
+| `GraphicsPath` | `StreamGeometry` / `PathGeometry` | Build paths with `StreamGeometryContext` |
+| `g.FillPath(brush, path)` | `context.DrawGeometry(brush, pen, geometry)` | |
+| `SolidBrush(Color)` | `new SolidColorBrush(Color)` | Or use `Brushes.Red`, `Brush.Parse("#FF0000")` |
+| `Pen(Color, width)` | `new Pen(brush, thickness)` | |
+| `Bitmap(width, height)` | `new RenderTargetBitmap(pixelSize)` | For offscreen rendering |
+| `Image.FromStream(stream)` | `new Bitmap(stream)` | `Avalonia.Media.Imaging.Bitmap` |
+| `g.MeasureString()` | `formattedText.Bounds` | Create `FormattedText`, read its `Bounds` |
+| `StringFormat` / text alignment | `FormattedText` + `TextAlignment` | |
+| `g.InterpolationMode` | `RenderOptions.BitmapInterpolationMode` attached property | Set on the control or in render code |
 
 ### Events
 
-| WinForms | Eto.Forms | Notes |
-|----------|-----------|-------|
-| `Click += handler` | `Click += handler` | Identical |
-| `Paint += handler` | (on `Drawable`) `Paint += handler` | `PaintEventArgs` wraps Eto `Graphics` |
-| `MouseDown += handler` | `MouseDown += handler` | Similar |
-| `MouseMove += handler` | `MouseMove += handler` | Similar |
-| `SelectedIndexChanged` | `SelectedIndexChanged` | Similar |
-| `TextChanged` | `TextChanged` | Identical |
-| `KeyDown` | `KeyDown` | Similar |
-| `DragDrop` | `DragDrop` | Similar |
-| `Shown` | `Shown` | Identical |
-| `FormClosing` | `Closing` | Different name |
+| WinForms | Avalonia | Notes |
+|----------|----------|-------|
+| `Click += handler` | `Click += handler` (on Button) | For other controls use `Tapped` or `PointerPressed` |
+| `Paint += handler` | Override `Render(DrawingContext)` | Or use `DrawingPresenter` control |
+| `MouseDown += handler` | `PointerPressed += handler` | Uses `PointerPressedEventArgs` |
+| `MouseMove += handler` | `PointerMoved += handler` | |
+| `MouseUp += handler` | `PointerReleased += handler` | |
+| `SelectedIndexChanged` | `SelectionChanged` | |
+| `TextChanged` | `TextChanged` (on TextBox) | Or bind to `Text` property changes |
+| `KeyDown` | `KeyDown` | |
+| `DragDrop` | `DragDrop.Drop` | Avalonia uses attached events for drag/drop |
+| `Shown` | `Opened` | On `Window` |
+| `FormClosing` | `Closing` | On `Window` |
 
 ---
 
-## Appendix C - Eto.Forms Dependencies by Platform
+## Appendix C - Avalonia Dependencies & Platform Support
 
 ### NuGet Packages
 
 ```xml
-<!-- Core (all platforms) -->
-<PackageReference Include="Eto.Forms" Version="2.8.*" />
+<!-- Core -->
+<PackageReference Include="Avalonia" Version="11.*" />
+<PackageReference Include="Avalonia.Desktop" Version="11.*" />
 
-<!-- Windows backend (choose one) -->
-<PackageReference Include="Eto.Platform.WinForms" Version="2.8.*" />
-<!-- OR -->
-<PackageReference Include="Eto.Platform.Wpf" Version="2.8.*" />
+<!-- Theme -->
+<PackageReference Include="Avalonia.Themes.Fluent" Version="11.*" />
 
-<!-- Linux backend -->
-<PackageReference Include="Eto.Platform.Gtk" Version="2.8.*" />
+<!-- Data Grid -->
+<PackageReference Include="Avalonia.Controls.DataGrid" Version="11.*" />
 
-<!-- macOS backend -->
-<PackageReference Include="Eto.Platform.Mac64" Version="2.8.*" />
+<!-- Default fonts (optional, for consistent cross-platform text) -->
+<PackageReference Include="Avalonia.Fonts.Inter" Version="11.*" />
+
+<!-- Diagnostics (development only) -->
+<PackageReference Include="Avalonia.Diagnostics" Version="11.*" Condition="'$(Configuration)' == 'Debug'" />
 ```
 
-### Platform Detection in Program.cs
+### Program.cs Entry Point
 
 ```csharp
-using Eto;
-using Eto.Forms;
+using Avalonia;
+
+namespace NMSE;
 
 static class Program
 {
     [STAThread]
-    static void Main(string[] args)
+    public static void Main(string[] args)
     {
-        // Eto.Forms auto-detects the platform, or it can be specified:
-        // new Application(Platforms.WinForms)  - Windows (WinForms backend)
-        // new Application(Platforms.Wpf)       - Windows (WPF backend)
-        // new Application(Platforms.Gtk)       - Linux (GTK3 backend)
-        // new Application(Platforms.Mac64)     - macOS (Cocoa backend)
-
-        new Application().Run(new MainForm());
+        BuildAvaloniaApp()
+            .StartWithClassicDesktopLifetime(args);
     }
+
+    public static AppBuilder BuildAvaloniaApp()
+        => AppBuilder.Configure<App>()
+            .UsePlatformDetect()
+            .WithInterFont()   // fallback font
+            .LogToTrace();
+}
+```
+
+### App.axaml Theme Setup
+
+```xml
+<Application xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             x:Class="NMSE.App">
+    <Application.Styles>
+        <!-- Default: Dark theme. Toggled via code-behind. -->
+        <FluentTheme Mode="Dark" />
+    </Application.Styles>
+</Application>
+```
+
+Theme switching in `App.axaml.cs`:
+```csharp
+public void SetTheme(string mode)
+{
+    var fluentTheme = Application.Current!.Styles.OfType<FluentTheme>().First();
+    fluentTheme.Mode = mode == "Light" ? FluentThemeMode.Light : FluentThemeMode.Dark;
 }
 ```
 
@@ -846,14 +900,16 @@ static class Program
 | Platform | Runtime Dependency | How Users Get It |
 |----------|-------------------|-----------------|
 | **Windows** | .NET 10 Runtime | Bundled (self-contained publish) or separate install |
-| **Linux** | .NET 10 Runtime + GTK3 | GTK3 is pre-installed on most desktops (GNOME, XFCE, Cinnamon, MATE). .NET bundled or separate. |
-| **macOS** | .NET 10 Runtime | Bundled (self-contained publish). Cocoa is built into macOS. |
+| **Linux** | .NET 10 Runtime | Bundled. Avalonia uses Skia  - **no GTK or other native toolkit required**. |
+| **macOS** | .NET 10 Runtime | Bundled. Avalonia uses Skia  - **no Mono, Cocoa, or other native dependency**. |
+
+> **Key advantage over Eto.Forms:** Avalonia is fully self-contained on all platforms. No GTK3 on Linux, no MonoMac on macOS. The only dependency is the .NET runtime, which can be bundled.
 
 ### Self-Contained Publish Commands
 
 ```bash
 # Windows (x64)
-dotnet publish -c Release -r win-x64 --self-contained -p:PublishSingleFile=true
+dotnet publish -c Release -r win-x64 --self-contained -p:PublishSingleFile=true -p:PublishReadyToRun=true
 
 # Linux (x64)
 dotnet publish -c Release -r linux-x64 --self-contained -p:PublishSingleFile=true
@@ -867,63 +923,118 @@ dotnet publish -c Release -r osx-arm64 --self-contained -p:PublishSingleFile=tru
 
 ---
 
+## Appendix D - UI/UX Design Reference: Sidebar Navigation & Dark Theme
+
+### Sidebar Behaviour Specification
+
+| Property | Value |
+|----------|-------|
+| **Default state** | Expanded (icon + label) |
+| **Expanded width** | ~220px |
+| **Collapsed width** | ~48px |
+| **Toggle button** | Hamburger icon (☰) at the top of the sidebar |
+| **Transition** | Smooth animated width transition (~200ms ease) |
+| **Persistence** | Collapse/expand state saved in `AppConfig` and restored on startup |
+| **Selection indicator** | Highlighted background on the selected item (accent colour) |
+| **Hover effect** | Subtle background highlight on mouse-over |
+| **Keyboard** | Arrow keys navigate items, Enter selects, Ctrl+1..Ctrl+9 for quick panel access |
+| **Tooltips** | When collapsed, hovering over an icon shows the panel name as a tooltip |
+
+### Sidebar Item Structure
+
+Each sidebar item consists of:
+```
+┌─────────────────────┐
+│ [Icon]  Panel Name   │  <- Expanded (icon 24x24 + label)
+└─────────────────────┘
+
+┌──────┐
+│[Icon]│  <- Collapsed (icon only, centred)
+└──────┘
+```
+
+### Sidebar Items (15 items, matching current tab order)
+
+| # | Icon Source | Label | Panel |
+|---|------------|-------|-------|
+| 1 | New icon in `Resources/ui/icons/` | Player | MainStatsPanel |
+| 2 | New icon in `Resources/ui/icons/` | Exosuit | ExosuitPanel |
+| 3 | New icon in `Resources/ui/icons/` | Multi-tools | MultitoolPanel |
+| 4 | New icon in `Resources/ui/icons/` | Starships | StarshipPanel |
+| 5 | New icon in `Resources/ui/icons/` | Fleet | FleetPanel |
+| 6 | New icon in `Resources/ui/icons/` | Exocraft | ExocraftPanel |
+| 7 | New icon in `Resources/ui/icons/` | Companions | CompanionPanel |
+| 8 | New icon in `Resources/ui/icons/` | Bases & Storage | BasePanel |
+| 9 | New icon in `Resources/ui/icons/` | Discoveries | DiscoveryPanel |
+| 10 | New icon in `Resources/ui/icons/` | Milestones | MilestonePanel |
+| 11 | New icon in `Resources/ui/icons/` | Settlements | SettlementPanel |
+| 12 | New icon in `Resources/ui/icons/` | ByteBeats | ByteBeatPanel |
+| 13 | New icon in `Resources/ui/icons/` | Account Rewards | AccountPanel |
+| 14 | New icon in `Resources/ui/icons/` | Export Settings | ExportConfigPanel |
+| 15 | New icon in `Resources/ui/icons/` | Raw JSON Editor | RawJsonPanel |
+
+> **Icon assets:** Reuse existing icons from `Resources/icons/` or `Resources/images/` where possible. Create new SVG icons for sidebar items if existing game icons don't suit the navigation context. All sidebar icons should be consistent in size (24×24 or 20×20) and style.
+
+### Theme Specification
+
+No theme specific colours specified.
+
+### Theme Toggle
+
+- **Location:** Menu bar (Settings -> Theme -> Dark / Light) and/or a toggle icon in the sidebar footer
+- **Behaviour:** Immediate switch, no restart required. Avalonia `FluentTheme.Mode` property change triggers re-render.
+- **Persistence:** Saved in `AppConfig.Theme` (`"Dark"` or `"Light"`)
+
+---
+
 ## Overall Timeline Summary
 
 ```
-Phase 0: Wine/Compatibility Quick-Ship
-  Lot 0.1  Wine testing + Linux bundle         ~1–2 hr    ─┐
-  Lot 0.2  macOS setup guides                  ~1–2 hr    ─┘ Total: ~2–4 hr
+Phase 0: Wine/Compatibility Quick-Ship ✅ COMPLETE
+  Lot 0.1  Wine testing + Linux bundle         ~1-2 hr    ─┐
+  Lot 0.2  macOS setup guides                  ~1-2 hr    ─┘ Total: ~2-4 hr
 
-Phase 1: NMSE.Lib Extraction (on main)
-  Lot 1.1  Lib project skeleton                ~30 min    ─┐
-  Lot 1.2  Move Models (20 files)              ~1 hr       │
-  Lot 1.3  Move Config (1 file)                ~20 min     │
-  Lot 1.4  Move IO (12 files)                  ~30 min     │
-  Lot 1.5  Move Core (21 files)                ~30 min     │
-  Lot 1.6  Move Data + IconManager abstraction ~2–3 hr     │
-  Lot 1.7  Move Resources                      ~1 hr       │
-  Lot 1.8  Update test projects                ~1 hr       │
-  Lot 1.9  Final verification & cleanup        ~1 hr      ─┘ Total: ~8.5 hr
+Phase 1: Avalonia UI Implementation (on avalonia branch)
+  Lot 1.1  Avalonia project + theme setup      ~2-3 hr    ─┐
+  Lot 1.2  MainWindow shell + sidebar          ~3-4 hr     │
+  Lot 1.3  Menu, toolbar, status bar           ~3-4 hr     │
+  Lot 1.4  AvaloniaIconProvider                ~1-2 hr     │
+  Lot 1.5  FontManager port                    ~1 hr       │
+  Lot 1.6  Utility classes port                ~2-3 hr     │
+  Lots 1.7-1.10  Simple panels (4)             ~3.25 hr    │
+  Lots 1.11-1.13 Simple-Medium panels (3)      ~5 hr       │
+  Lots 1.14-1.17 Medium panels (4)             ~10 hr      │
+  Lots 1.18-1.20 Medium-Hard panels (3)        ~8.5 hr     │
+  Lots 1.21-1.25 Hard panels (4)               ~15.5-19.5h │
+  Lot 1.26 InventoryGridPanel                  ~8-12 hr    │
+  Lot 1.27 Glyph rendering                    ~1-2 hr     │
+  Lot 1.28 Localisation pass                   ~2-3 hr     │
+  Lot 1.29 Integration testing                 ~3-4 hr    ─┘ Total: ~68-82 hr
 
-Phase 2: Eto.Forms UI Conversion (on eto-forms branch)
-  Lot 2.1  Eto.Forms project setup             ~1–2 hr    ─┐
-  Lot 2.2  EtoIconProvider                     ~1–2 hr     │
-  Lot 2.3  FontManager port                    ~1 hr       │
-  Lot 2.4  MainForm shell                      ~3–4 hr     │
-  Lot 2.5  Save load/save infrastructure       ~2–3 hr     │
-  Lot 2.6  Utility classes port                ~1–2 hr     │
-  Lots 2.7–2.11  Simple panels (5)             ~3.5 hr     │
-  Lots 2.12–2.18 Medium panels (7)             ~12.5 hr    │
-  Lots 2.19–2.25 Hard panels (5)               ~17 hr      │
-  Lot 2.26 InventoryGridPanel                  ~5–8 hr     │
-  Lot 2.27 Glyph rendering                    ~1 hr       │
-  Lot 2.28 Integration testing                 ~2–3 hr    ─┘ Total: ~50–60 hr
-
-Phase 3: Polish, Packaging & Release (on eto-forms branch)
-  Lot 3.1  Publish profiles                    ~2 hr      ─┐
-  Lot 3.2  Linux packaging                     ~2 hr       │
-  Lot 3.3  macOS packaging                     ~2 hr       │
-  Lot 3.4  Windows packaging update            ~1 hr       │
-  Lot 3.5  Documentation                       ~1–2 hr     │
-  Lot 3.6  Merge to main                       ~1 hr      ─┘ Total: ~9–10 hr
+Phase 2: Polish, Packaging & Release (on avalonia branch)
+  Lot 2.1  Publish profiles                    ~2 hr      ─┐
+  Lot 2.2  Linux packaging                     ~2 hr       │
+  Lot 2.3  macOS packaging                     ~2 hr       │
+  Lot 2.4  Windows packaging update            ~1 hr       │
+  Lot 2.5  Documentation                       ~2-3 hr     │
+  Lot 2.6  Merge to experimental -> main        ~2-3 hr    ─┘ Total: ~11-13 hr
 
 ══════════════════════════════════════════════════════════════
-GRAND TOTAL (Effort):  ~70–83 hours across ~40 lots
+GRAND TOTAL (Effort):  ~81-99 hours across ~35 lots
 ══════════════════════════════════════════════════════════════
 ```
 
 ### In Terms of Sessions
 
-Assuming each session is ~2–4 hours of focused work:
+Assuming each session is ~2-4 hours of focused work:
 
 | Phase | Sessions | Calendar Time (1 session/day) |
 |-------|----------|-------------------------------|
-| Phase 0 | 1 session | 1 day |
-| Phase 1 | 3–4 sessions | 3–4 days |
-| Phase 2 | 15–20 sessions | 3–4 weeks |
-| Phase 3 | 3–4 sessions | 3–4 days |
-| **Total** | **~22–29 sessions** | **~4–6 weeks** |
+| Phase 0 | ✅ Complete |  - |
+| Phase 2 | 20-28 sessions | 4-6 weeks |
+| Phase 3 | 4-5 sessions | 4-5 days |
+| **Total** | **~24-33 sessions** | **~5-7 weeks** |
 
 ---
 
-*This document is the single source of truth for the NMSE cross-platform migration. All architectural decisions, effort estimates, file inventories, and acceptance criteria are maintained here. Update this document as work progresses.*
+*This document is the single source of truth for the NMSE cross-platform migration. All architectural decisions, effort estimates, file inventories, and acceptance criteria are maintained here. Update this document as work progresses*
