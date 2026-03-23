@@ -1,4 +1,14 @@
-## NMSE — No Man's Save Editor v1.0.356 (preview)
+## NMSE — No Man's Save Editor v1.0.361 (preview)
+
+### Changelog
+
+- Project moved to Native AOT with trimmig for builds. Users don't require .NET 10 to be separately installed anymore.
+- Fix for icon loading issue for Windows taskbar (due to DB loading workaround).
+
+<br />
+
+<details>
+<summary>Previous Changelog 1.0.356 (preview)</summary>
 
 ### Changelog
 
@@ -9,6 +19,8 @@
 - UI localisation string fixes.
 
 These fixes and changes address Issues #7, #5, #13, #9, and #11
+
+</details>
 
 <details>
 <summary>Previous Changelog 1.0.355 (preview)</summary>
@@ -37,6 +49,8 @@ This preview release contains critical bug fixes and additions for the following
 - Raw JSON Editor find next bugs need fixing.
 
 </details>
+
+<br />
 
 _Documentation will need some future updates to cover these changes._
 
