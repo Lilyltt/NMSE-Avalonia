@@ -14,7 +14,7 @@ public partial class MainFormResources : Form
     public const string AppName = "NMSE (NO MAN'S SAVE EDITOR)";
     // VerMajor, VerMinor, VerPatch are generated from version.json into BuildInfo.g.cs
     public const string SuppGameRel = "6.20 Remnant";
-    public const string IconResource = "NMSE.Resources.app.NMSE.ico";
+    public const string IconPath = "Resources/app/NMSE.ico";
     public const string GitHubUrl = "https://github.com/vectorcmdr/NMSE";
     public const string SponsorUrl = "https://github.com/sponsors/vectorcmdr";
     public const string GitHubCreatorUrl = "https://github.com/vectorcmdr";
@@ -88,6 +88,10 @@ public partial class MainFormResources : Form
 
     /// <summary>Background icon preload task started during construction.</summary>
     private Task? _iconPreloadTask;
+
+    /// <summary>Cached application icon so we can re-apply it after window style changes
+    /// (e.g. the Opacity 0→1 transition that removes WS_EX_LAYERED).</summary>
+    private Icon? _appIcon;
 
     public MainFormResources()
     {
@@ -177,6 +181,17 @@ public partial class MainFormResources : Form
             }
             Opacity = 1;
 
+            // Re-apply the icon AFTER the opacity change hack.
+            // Setting Opacity from 0 to 1 removes WS_EX_LAYERED
+            // from the native window style, which can cause Windows
+            // to drop the taskbar icon.  Re-setting Form.Icon forces
+            // a fresh WM_SETICON to the shell.
+            if (_appIcon != null)
+            {
+                Icon = _appIcon;
+                ShowIcon = true;
+            }
+
             // Non-blocking background update check after startup
             _ = CheckForUpdateOnStartupAsync();
         };
@@ -194,22 +209,22 @@ public partial class MainFormResources : Form
         ResizeBegin += (_, _) => SuspendLayout();
         ResizeEnd += (_, _) => { ResumeLayout(true); Refresh(); };
 
-        try
+        // Load the application icon for the window title bar and taskbar.
+        // The icon is stored in _appIcon so it can be re-applied after the
+        // Opacity 0→1 transition in the Shown handler.  That transition
+        // removes WS_EX_LAYERED from the window, which can drop the taskbar
+        // icon on some Windows builds (observed: works in Debug, fails in
+        // Release due to JIT-timing differences in layered-window teardown).
+        //
+        // Primary: load from the ICO file copied to the output directory —
+        //          this is the most robust path (no ResourceManager, no
+        //          assembly-embedded-resource naming quirks).
+        // Fallback: Properties.Resources.AppIcon (ResourceManager approach).
+        _appIcon = LoadAppIcon();
+        if (_appIcon != null)
         {
-            var asm = typeof(MainFormResources).Assembly;
-            // Manifest resource name: <DefaultNamespace>.Resources.app.NMSE.ico
-            // Note: do NOT use 'using' – WinForms may reference the stream after
-            // this scope; the GC will reclaim it when the Form is disposed.
-            var stream = asm.GetManifestResourceStream(IconResource);
-            if (stream != null)
-            {
-                Icon = new Icon(stream);
-                ShowIcon = true;
-            }
-        }
-        catch
-        {
-            // Ignore - icon is non-critical
+            Icon = _appIcon;
+            ShowIcon = true;
         }
 
         // Set dock styles before adding controls
@@ -224,6 +239,44 @@ public partial class MainFormResources : Form
         Controls.Add(_menuStrip);
         Controls.Add(_statusStrip);
         MainMenuStrip = _menuStrip;
+    }
+
+    /// <summary>
+    /// Loads the application icon using the most reliable method available.
+    /// Primary: reads the ICO file from the output directory (no ResourceManager
+    /// dependency — works identically in Debug and Release).
+    /// Fallback: Properties.Resources.AppIcon via the compiled .resources blob.
+    /// </summary>
+    private static Icon? LoadAppIcon()
+    {
+        // 1. Try the file on disk (copied to output by the build).
+        try
+        {
+            string icoPath = Path.Combine(AppContext.BaseDirectory, IconPath);
+            if (File.Exists(icoPath))
+            {
+                // Read into memory so the file is not locked.
+                byte[] bytes = File.ReadAllBytes(icoPath);
+                using var ms = new MemoryStream(bytes);
+                return new Icon(ms);
+            }
+        }
+        catch (Exception ex)
+        {
+            Debug.WriteLine($"File-based icon load failed: {ex.Message}");
+        }
+
+        // 2. Fallback: Properties.Resources.AppIcon (ResourceManager).
+        try
+        {
+            return Properties.Resources.AppIcon;
+        }
+        catch (Exception ex)
+        {
+            Debug.WriteLine($"ResourceManager icon load failed: {ex.Message}");
+        }
+
+        return null;
     }
 
     private void InitializeMenus()
