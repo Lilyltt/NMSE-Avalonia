@@ -459,7 +459,6 @@ partial class FrigatePanel
             cb.Items.Add(FrigateTraitDatabase.None);
             foreach (var t in FrigateTraitDatabase.Traits)
                 cb.Items.Add(t);
-            cb.DisplayMember = "DisplayName";
         }
 
         // Wire event handlers

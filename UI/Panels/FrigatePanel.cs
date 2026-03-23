@@ -42,7 +42,6 @@ public partial class FrigatePanel : UserControl
             cb.Items.Add(FrigateTraitDatabase.None);
             foreach (var t in FrigateTraitDatabase.Traits)
                 cb.Items.Add(t);
-            cb.DisplayMember = "DisplayName";
             if (selected != null && cb.Items.Contains(selected))
                 cb.SelectedItem = selected;
         }
