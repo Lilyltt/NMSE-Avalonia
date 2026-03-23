@@ -2,6 +2,7 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:vm="using:NMSE.UI.ViewModels.Controls"
              xmlns:loc="using:NMSE.UI.Localization"
+             xmlns:ctrl="using:NMSE.UI.Views.Controls"
              x:Class="NMSE.UI.Views.Controls.InventoryGridControl"
              x:Name="Root"
              x:DataType="vm:InventoryGridViewModel"
@@ -75,6 +76,14 @@
                                                Width="48" Height="48"
                                                HorizontalAlignment="Center" VerticalAlignment="Center" />
 
+                                        <ctrl:MarqueeTextBlock Text="{Binding ItemName}"
+                                                              FontSize="9" Foreground="White"
+                                                              IsVisible="{Binding !IsEmpty}"
+                                                              HorizontalAlignment="Stretch"
+                                                              VerticalAlignment="Top"
+                                                              Margin="2,1,2,0"
+                                                              ScrollSpeed="25" PauseSeconds="2" />
+
                                         <TextBlock Text="{Binding DisplayAmount}"
                                                    FontSize="10" FontWeight="Bold"
                                                    Foreground="White"
@@ -92,6 +101,13 @@
                                             <ProgressBar Value="{Binding Amount}" Maximum="{Binding MaxAmount}"
                                                          Height="3" Minimum="0" />
                                         </StackPanel>
+
+                                        <Border IsVisible="{Binding HasAdjacencyBorder}"
+                                                BorderBrush="{Binding AdjBorderColor}"
+                                                BorderThickness="{Binding AdjBorderThickness}"
+                                                CornerRadius="3"
+                                                IsHitTestVisible="False"
+                                                Opacity="0.7" />
 
                                         <Border IsVisible="{Binding IsSelected}"
                                                 BorderBrush="{DynamicResource SemiColorPrimary}"

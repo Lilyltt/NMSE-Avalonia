@@ -170,6 +170,90 @@ public partial class SettlementViewModel : PanelViewModelBase
             HasSelection = false;
     }
 
+    [RelayCommand]
+    private async Task ExportSettlement()
+    {
+        if (_settlements == null || SelectedSettlementIndex < 0 || _filteredIndices.Count == 0 || SaveFilePickerFunc == null) return;
+        int dataIdx = _filteredIndices[SelectedSettlementIndex];
+        if (dataIdx >= _settlements.Length) return;
+
+        var settlement = _settlements.GetObject(dataIdx);
+        var cfg = ExportConfig.Instance;
+        var vars = new Dictionary<string, string>
+        {
+            ["settlement_name"] = SettlementName,
+            ["seed"] = SeedValue
+        };
+        string defaultName = ExportConfig.BuildFileName(cfg.SettlementTemplate, "", vars);
+        string? path = await SaveFilePickerFunc("Export Settlement", cfg.SettlementExt.TrimStart('.'),
+            ExportConfig.BuildDialogFilter(cfg.SettlementExt, "Settlement files"));
+        if (string.IsNullOrEmpty(path)) return;
+        try { settlement.ExportToFile(path); } catch { }
+    }
+
+    [RelayCommand]
+    private async Task ImportSettlement()
+    {
+        if (_settlements == null || OpenFilePickerFunc == null) return;
+        string? path = await OpenFilePickerFunc("Import Settlement",
+            ExportConfig.BuildImportFilter(ExportConfig.Instance.SettlementExt, "Settlement files", ".stl"));
+        if (string.IsNullOrEmpty(path)) return;
+        try
+        {
+            var imported = JsonObject.ImportFromFile(path);
+            imported = InventoryImportHelper.UnwrapNomNom(imported, "Settlement");
+
+            int selectedDataIdx = (SelectedSettlementIndex >= 0 && _filteredIndices.Count > 0)
+                ? _filteredIndices[SelectedSettlementIndex] : -1;
+            int target = SettlementLogic.FindImportTargetIndex(_settlements, selectedDataIdx);
+
+            if (target == -2)
+                target = selectedDataIdx >= 0 ? selectedDataIdx : 0;
+
+            if (target == -1)
+            {
+                _settlements.Add(imported);
+            }
+            else if (target >= 0 && target < _settlements.Length)
+            {
+                var existing = _settlements.GetObject(target);
+                foreach (var propName in imported.Names())
+                    existing.Set(propName, imported.Get(propName));
+            }
+
+            ReloadSettlementList();
+        }
+        catch { }
+    }
+
+    private void ReloadSettlementList()
+    {
+        SettlementNames.Clear();
+        _filteredIndices.Clear();
+        HasSelection = false;
+        if (_settlements == null) return;
+
+        for (int i = 0; i < _settlements.Length; i++)
+        {
+            try
+            {
+                _filteredIndices.Add(i);
+                var settlement = _settlements.GetObject(i);
+                string name = settlement.GetString("Name") ?? $"Settlement {i + 1}";
+                SettlementNames.Add(name);
+            }
+            catch
+            {
+                _filteredIndices.Add(i);
+                SettlementNames.Add($"Settlement {i + 1}");
+            }
+        }
+
+        InfoLabel = $"Found {_filteredIndices.Count} settlement(s).";
+        if (SettlementNames.Count > 0)
+            SelectedSettlementIndex = 0;
+    }
+
     public override void SaveData(JsonObject saveData)
     {
         try

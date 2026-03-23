@@ -36,6 +36,10 @@
                         </ListBox>
                         <Button Content="{loc:Locale bytebeat.delete_song}" Command="{Binding DeleteSongCommand}"
                                 HorizontalAlignment="Stretch" />
+                        <StackPanel Orientation="Horizontal" Spacing="4">
+                            <Button Content="{loc:Locale common.export}" Command="{Binding ExportSongCommand}" HorizontalAlignment="Stretch" />
+                            <Button Content="{loc:Locale common.import}" Command="{Binding ImportSongCommand}" HorizontalAlignment="Stretch" />
+                        </StackPanel>
                     </StackPanel>
                 </DockPanel>
 

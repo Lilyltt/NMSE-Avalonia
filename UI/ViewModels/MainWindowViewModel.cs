@@ -1,5 +1,6 @@
 using System.Collections.ObjectModel;
 using System.Diagnostics;
+using System.IO.Compression;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using NMSE.Config;
@@ -43,6 +44,8 @@ public partial class MainWindowViewModel : ViewModelBase
     [ObservableProperty] private string _itemCountText = "";
     [ObservableProperty] private bool _isProgressVisible;
     [ObservableProperty] private int _progressValue;
+    [ObservableProperty] private bool _isLoading;
+    [ObservableProperty] private string _loadingMessage = "";
     [ObservableProperty] private bool _hasUnsavedChanges;
     [ObservableProperty] private bool _isSaveLoaded;
     [ObservableProperty] private int _selectedNavIndex;
@@ -112,6 +115,13 @@ public partial class MainWindowViewModel : ViewModelBase
 
         foreach (var (_, tag) in LocalisationService.SupportedLanguages)
             Languages.Add(new LanguageItem(tag));
+
+        MainStats.ReloadRequested += (_, _) =>
+        {
+            PopulateSaveSlots();
+            if (_currentFilePath != null && File.Exists(_currentFilePath))
+                _ = LoadSaveDataAsync(_currentFilePath);
+        };
 
         SelectedPanel = MainStats;
     }
@@ -544,6 +554,7 @@ public partial class MainWindowViewModel : ViewModelBase
             SaveFileManager.RegisterContextTransforms(_currentSaveData);
 
             Account.SetSaveDirectory(saveDir);
+            MainStats.SetSaveFilePath(filePath);
 
             ProgressValue = 80;
             _loadedTabIndices.Clear();
@@ -572,6 +583,12 @@ public partial class MainWindowViewModel : ViewModelBase
 
         var panel = tabIndex >= 0 && tabIndex < Panels.Count ? Panels[tabIndex] : null;
         panel?.LoadData(_currentSaveData, _database, _iconManager);
+
+        if (panel == Account && Account.AccountData != null)
+            MainStats.LoadAccountData(Account.AccountData);
+
+        if (panel == Discovery)
+            Discovery.Recipe.SetDatabases(_recipeDatabase, _database);
     }
 
     private void SyncAllPanelData()
@@ -635,6 +652,168 @@ public partial class MainWindowViewModel : ViewModelBase
             _ = LoadSaveDataAsync(_currentFilePath);
     }
 
+    private static void ExtractZipEntry(ZipArchiveEntry entry, string destPath)
+    {
+        using var entryStream = entry.Open();
+        using var fileStream = new FileStream(destPath, FileMode.Create, FileAccess.Write, FileShare.None);
+        entryStream.CopyTo(fileStream);
+    }
+
+    [RelayCommand]
+    private void RestoreBackupAll()
+    {
+        if (_currentFilePath == null) return;
+        try
+        {
+            string? saveDir = Path.GetDirectoryName(_currentFilePath);
+            if (saveDir == null) return;
+            string backupDir = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Save Backups");
+            if (!Directory.Exists(backupDir)) { StatusText = UiStrings.Get("status.no_backups_found"); return; }
+
+            string dirName = Path.GetFileName(saveDir);
+            var zips = Directory.GetFiles(backupDir, $"{dirName}_*.zip").OrderByDescending(f => f).ToArray();
+            if (zips.Length == 0) { StatusText = UiStrings.Get("status.no_backups_found"); return; }
+
+            string latestZip = zips[0];
+            string currentFileName = Path.GetFileName(_currentFilePath);
+
+            using var archive = ZipFile.OpenRead(latestZip);
+            var entry = archive.GetEntry(currentFileName);
+            if (entry == null) { StatusText = UiStrings.Format("status.backup_entry_not_found", currentFileName); return; }
+
+            ExtractZipEntry(entry, _currentFilePath);
+            StatusText = UiStrings.Format("status.backup_restored", currentFileName, Path.GetFileName(latestZip));
+            _ = LoadSaveDataAsync(_currentFilePath);
+        }
+        catch (Exception ex) { StatusText = UiStrings.Format("status.backup_restore_failed", ex.Message); }
+    }
+
+    [RelayCommand]
+    private void RestoreBackupSingle()
+    {
+        if (_currentFilePath == null) return;
+        try
+        {
+            string? saveDir = Path.GetDirectoryName(_currentFilePath);
+            if (saveDir == null) return;
+            string backupDir = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Save Backups");
+            if (!Directory.Exists(backupDir)) { StatusText = UiStrings.Get("status.no_backups_found"); return; }
+
+            string dirName = Path.GetFileName(saveDir);
+            var zips = Directory.GetFiles(backupDir, $"{dirName}_*.zip").OrderByDescending(f => f).ToArray();
+            if (zips.Length == 0) { StatusText = UiStrings.Get("status.no_backups_found"); return; }
+
+            string latestZip = zips[0];
+            string currentFileName = Path.GetFileName(_currentFilePath);
+
+            using var archive = ZipFile.OpenRead(latestZip);
+            var entry = archive.GetEntry(currentFileName);
+            if (entry == null) { StatusText = UiStrings.Format("status.backup_entry_not_found", currentFileName); return; }
+
+            ExtractZipEntry(entry, _currentFilePath);
+
+            if (Account.AccountFilePath != null)
+            {
+                string accountFileName = Path.GetFileName(Account.AccountFilePath);
+                var accountEntry = archive.GetEntry(accountFileName);
+                if (accountEntry != null)
+                    ExtractZipEntry(accountEntry, Account.AccountFilePath);
+            }
+
+            StatusText = UiStrings.Format("status.backup_restored", currentFileName, Path.GetFileName(latestZip));
+            _ = LoadSaveDataAsync(_currentFilePath);
+        }
+        catch (Exception ex) { StatusText = UiStrings.Format("status.backup_restore_failed", ex.Message); }
+    }
+
+    public Func<Task<string?>>? SaveFilePickerFunc { get; set; }
+    public Func<Task<string?>>? OpenFilePickerFunc { get; set; }
+
+    [RelayCommand]
+    private async Task ExportJson()
+    {
+        if (_currentSaveData == null || SaveFilePickerFunc == null) return;
+        SyncAllPanelData();
+        string? path = await SaveFilePickerFunc();
+        if (string.IsNullOrEmpty(path)) return;
+        try
+        {
+            File.WriteAllText(path, _currentSaveData.ToString());
+            StatusText = UiStrings.Format("status.json_exported", Path.GetFileName(path));
+        }
+        catch (Exception ex) { StatusText = UiStrings.Format("status.json_export_failed", ex.Message); }
+    }
+
+    [RelayCommand]
+    private async Task ImportJson()
+    {
+        if (OpenFilePickerFunc == null) return;
+        string? path = await OpenFilePickerFunc();
+        if (string.IsNullOrEmpty(path) || !File.Exists(path)) return;
+        try
+        {
+            string json = File.ReadAllText(path);
+            var imported = JsonParser.ParseObject(json);
+            if (imported == null) { StatusText = "Failed to parse JSON file."; return; }
+
+            _currentSaveData = imported;
+            SaveFileManager.RegisterContextTransforms(_currentSaveData);
+            _loadedTabIndices.Clear();
+            LoadPanelForTab(SelectedNavIndex);
+            _loadedTabIndices.Add(SelectedNavIndex);
+            IsSaveLoaded = true;
+            StatusText = UiStrings.Format("status.json_imported", Path.GetFileName(path));
+        }
+        catch (Exception ex) { StatusText = UiStrings.Format("status.json_import_failed", ex.Message); }
+    }
+
+    public Action? ShutdownApp { get; set; }
+
+    [RelayCommand]
+    private async Task CheckForUpdates()
+    {
+        try
+        {
+            StatusText = UiStrings.Get("update.checking");
+            var currentVersion = new Version(int.Parse(BuildInfo.VerMajor), int.Parse(BuildInfo.VerMinor), int.Parse(BuildInfo.VerPatch));
+            var update = await UpdateService.CheckForUpdateAsync(currentVersion);
+            if (update == null)
+            {
+                StatusText = UiStrings.Format("update.up_to_date_msg",
+                    $"{BuildInfo.VerMajor}.{BuildInfo.VerMinor}.{BuildInfo.VerPatch}");
+                return;
+            }
+
+            StatusText = UiStrings.Get("update.downloading");
+            string downloadDir = Path.Combine(Path.GetTempPath(), "nmse_update");
+            Directory.CreateDirectory(downloadDir);
+            string zipPath = Path.Combine(downloadDir, "update.zip");
+
+            var progress = new Progress<(long received, long? total)>(p =>
+            {
+                if (p.total > 0)
+                {
+                    int pct = (int)(p.received * 100 / p.total.Value);
+                    StatusText = UiStrings.Format("update.downloading_progress", pct);
+                }
+            });
+
+            await UpdateService.DownloadFileAsync(update.DownloadUrl, zipPath, progress);
+            StatusText = UiStrings.Get("update.applying");
+
+            bool launched = UpdateService.ApplyUpdateAndRelaunch(zipPath);
+            if (launched)
+            {
+                ShutdownApp?.Invoke();
+            }
+            else
+            {
+                StatusText = UiStrings.Get("update.apply_failed");
+            }
+        }
+        catch (Exception ex) { StatusText = UiStrings.Format("update.check_failed", ex.Message); }
+    }
+
     [RelayCommand]
     private void OpenGitHub()
     {
@@ -656,40 +835,52 @@ public partial class MainWindowViewModel : ViewModelBase
     }
 
     [RelayCommand]
-    private void SelectLanguage(string tag)
+    private async Task SelectLanguage(string tag)
     {
         foreach (var lang in Languages)
             lang.IsSelected = lang.Tag == tag;
 
-        UiStrings.Load(tag);
-        NMSE.UI.Localization.LocaleManager.Instance.NotifyLanguageChanged();
-        bool loaded = _localisationService.LoadLanguage(tag);
-        if (loaded)
-        {
-            _database.ApplyLocalisation(_localisationService);
-            RewardDatabase.ApplyLocalisation(_localisationService);
-            _wordDatabase?.ApplyLocalisation(_localisationService);
-            _recipeDatabase.ApplyLocalisation(_localisationService);
-            TitleDatabase.ApplyLocalisation(_localisationService);
-            FrigateTraitDatabase.ApplyLocalisation(_localisationService);
-            SettlementPerkDatabase.ApplyLocalisation(_localisationService);
-            WikiGuideDatabase.ApplyLocalisation(_localisationService);
+        LoadingMessage = UiStrings.Get("status.switching_language");
+        IsLoading = true;
 
-            foreach (int idx in _loadedTabIndices)
+        try
+        {
+            await Task.Yield();
+
+            UiStrings.Load(tag);
+            NMSE.UI.Localization.LocaleManager.Instance.NotifyLanguageChanged();
+            bool loaded = _localisationService.LoadLanguage(tag);
+            if (loaded)
             {
-                if (idx >= 0 && idx < Panels.Count && _currentSaveData != null)
-                    Panels[idx].LoadData(_currentSaveData, _database, _iconManager);
+                _database.ApplyLocalisation(_localisationService);
+                RewardDatabase.ApplyLocalisation(_localisationService);
+                _wordDatabase?.ApplyLocalisation(_localisationService);
+                _recipeDatabase.ApplyLocalisation(_localisationService);
+                TitleDatabase.ApplyLocalisation(_localisationService);
+                FrigateTraitDatabase.ApplyLocalisation(_localisationService);
+                SettlementPerkDatabase.ApplyLocalisation(_localisationService);
+                WikiGuideDatabase.ApplyLocalisation(_localisationService);
+
+                foreach (int idx in _loadedTabIndices)
+                {
+                    if (idx >= 0 && idx < Panels.Count && _currentSaveData != null)
+                        Panels[idx].LoadData(_currentSaveData, _database, _iconManager);
+                }
+
+                StatusText = UiStrings.Format("status.language_set", tag);
+            }
+            else
+            {
+                StatusText = UiStrings.Format("status.language_not_found", tag);
             }
 
-            StatusText = UiStrings.Format("status.language_set", tag);
+            AppConfig.Instance.Language = tag;
+            AppConfig.Instance.Save();
         }
-        else
+        finally
         {
-            StatusText = UiStrings.Format("status.language_not_found", tag);
+            IsLoading = false;
         }
-
-        AppConfig.Instance.Language = tag;
-        AppConfig.Instance.Save();
     }
 
     public void SaveWindowState(int x, int y, int width, int height)

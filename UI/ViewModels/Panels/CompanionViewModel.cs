@@ -299,6 +299,45 @@ public partial class CompanionViewModel : PanelViewModelBase
         CompanionLogic.ResetAccessoryCustomisation(SelectedCompanion.CompanionData);
     }
 
+    [RelayCommand]
+    private async Task ExportCompanion()
+    {
+        if (SelectedCompanion?.CompanionData == null || SaveFilePickerFunc == null) return;
+        SaveCompanionChanges();
+        var cfg = ExportConfig.Instance;
+        string? path = await SaveFilePickerFunc("Export Companion", cfg.CompanionExt.TrimStart('.'),
+            ExportConfig.BuildDialogFilter(cfg.CompanionExt, "Companion files"));
+        if (string.IsNullOrEmpty(path)) return;
+        try { CompanionLogic.ExportCompanion(SelectedCompanion.CompanionData, path); }
+        catch { }
+    }
+
+    [RelayCommand]
+    private async Task ImportCompanion()
+    {
+        if (_playerState == null || OpenFilePickerFunc == null) return;
+        var cfg = ExportConfig.Instance;
+        string? path = await OpenFilePickerFunc("Import Companion",
+            ExportConfig.BuildImportFilter(cfg.CompanionExt, "Companion files", ".pet", ".cmp"));
+        if (string.IsNullOrEmpty(path)) return;
+        try
+        {
+            var pets = _playerState.GetArray("Pets");
+            var eggs = _playerState.GetArray("Eggs");
+            var target = pets ?? eggs;
+            if (target == null) return;
+
+            try { CompanionLogic.ImportCompanion(target, path); }
+            catch (InvalidOperationException)
+            {
+                var fallback = target == pets ? eggs : pets;
+                if (fallback != null) CompanionLogic.ImportCompanion(fallback, path);
+                else return;
+            }
+        }
+        catch { }
+    }
+
     public override void SaveData(JsonObject saveData)
     {
         SaveCompanionChanges();

@@ -172,41 +172,91 @@
 
                 <!-- Save Utilities Tab -->
                 <TabItem Header="{loc:Locale player.tab_save_utils}">
-                    <Border Classes="card" Padding="24" Margin="8"
-                            HorizontalAlignment="Center" VerticalAlignment="Center">
-                        <StackPanel Spacing="8" HorizontalAlignment="Center">
-                            <TextBlock Text="{loc:Locale player.section_save_utils}" Classes="sectionHeader" HorizontalAlignment="Center" />
-                            <TextBlock Text="{loc:Locale player.section_save_utils_placeholder}"
-                                       Foreground="{DynamicResource SemiColorText2}"
-                                       HorizontalAlignment="Center" />
+                    <ScrollViewer HorizontalScrollBarVisibility="Disabled">
+                        <StackPanel Spacing="16" Margin="8">
+                            <Border Classes="card" Padding="12">
+                                <StackPanel Spacing="8">
+                                    <TextBlock Text="{loc:Locale player.section_save_utils}" Classes="sectionHeader" />
+                                    <TextBlock Text="{loc:Locale player.save_utils_warning}"
+                                               Foreground="#FFFF4444" FontWeight="Bold" TextWrapping="Wrap" />
+
+                                    <StackPanel Orientation="Horizontal" Spacing="8" Margin="0,8,0,0">
+                                        <TextBlock Text="{loc:Locale player.source_label}" VerticalAlignment="Center" />
+                                        <ComboBox ItemsSource="{Binding SlotItems}" SelectedIndex="{Binding SourceSlotIndex}" MinWidth="100" />
+                                        <TextBlock Text="{loc:Locale player.dest_label}" VerticalAlignment="Center" Margin="8,0,0,0" />
+                                        <ComboBox ItemsSource="{Binding SlotItems}" SelectedIndex="{Binding DestSlotIndex}" MinWidth="100" />
+                                    </StackPanel>
+
+                                    <WrapPanel Orientation="Horizontal" Margin="0,4,0,0">
+                                        <Button Content="{loc:Locale player.copy_slot}" Command="{Binding CopySlotCommand}" Margin="0,0,4,4" />
+                                        <Button Content="{loc:Locale player.move_slot}" Command="{Binding MoveSlotCommand}" Margin="0,0,4,4" />
+                                        <Button Content="{loc:Locale player.swap_slots}" Command="{Binding SwapSlotsCommand}" Margin="0,0,4,4" />
+                                        <Button Content="{loc:Locale player.delete_slot}" Command="{Binding DeleteSlotCommand}" Margin="0,0,4,4" />
+                                    </WrapPanel>
+
+                                    <Separator Margin="0,8" />
+
+                                    <TextBlock Text="{loc:Locale player.transfer_label}" Classes="sectionHeader" />
+                                    <StackPanel Orientation="Horizontal" Spacing="8">
+                                        <TextBlock Text="{loc:Locale player.dest_platform}" VerticalAlignment="Center" />
+                                        <ComboBox ItemsSource="{Binding PlatformItems}" SelectedIndex="{Binding TransferPlatformIndex}" MinWidth="140" />
+                                        <Button Content="{loc:Locale player.transfer_to_platform}" Command="{Binding TransferPlatformCommand}" />
+                                    </StackPanel>
+
+                                    <TextBlock Text="{Binding StatusText}" Margin="0,8,0,0"
+                                               Foreground="{DynamicResource SemiColorText2}" TextWrapping="Wrap" />
+                                </StackPanel>
+                            </Border>
                         </StackPanel>
-                    </Border>
+                    </ScrollViewer>
                 </TabItem>
 
                 <!-- Guides Tab -->
                 <TabItem Header="{loc:Locale player.tab_guide}">
-                    <Border Classes="card" Padding="24" Margin="8"
-                            HorizontalAlignment="Center" VerticalAlignment="Center">
-                        <StackPanel Spacing="8" HorizontalAlignment="Center">
-                            <TextBlock Text="{loc:Locale player.guide_title}" Classes="sectionHeader" HorizontalAlignment="Center" />
-                            <TextBlock Text="{loc:Locale player.guide_placeholder}"
-                                       Foreground="{DynamicResource SemiColorText2}"
-                                       HorizontalAlignment="Center" />
+                    <DockPanel Margin="8">
+                        <StackPanel DockPanel.Dock="Top" Orientation="Horizontal" Spacing="8" Margin="0,0,0,8">
+                            <TextBlock Text="{loc:Locale player.guide_title}" Classes="sectionHeader" VerticalAlignment="Center" />
+                            <TextBox Text="{Binding GuideFilter}" Watermark="{loc:Locale player.guide_filter}" Width="200" Margin="16,0,0,0" />
+                            <Button Content="{loc:Locale player.guide_unlock_all}" Command="{Binding UnlockAllGuidesCommand}" />
+                            <Button Content="{loc:Locale player.guide_lock_all}" Command="{Binding LockAllGuidesCommand}" />
                         </StackPanel>
-                    </Border>
+                        <DataGrid ItemsSource="{Binding GuideTopics}"
+                                  AutoGenerateColumns="False"
+                                  SelectionMode="Single"
+                                  CanUserSortColumns="True"
+                                  IsReadOnly="False">
+                            <DataGrid.Columns>
+                                <DataGridTextColumn Header="Topic ID" Binding="{Binding TopicId}" Width="180" IsReadOnly="True" />
+                                <DataGridTextColumn Header="Name" Binding="{Binding Name}" Width="*" IsReadOnly="True" />
+                                <DataGridTextColumn Header="Category" Binding="{Binding Category}" Width="160" IsReadOnly="True" />
+                                <DataGridCheckBoxColumn Header="Seen" Binding="{Binding IsSeen}" Width="60" />
+                                <DataGridCheckBoxColumn Header="Unlocked" Binding="{Binding IsUnlocked}" Width="80" />
+                            </DataGrid.Columns>
+                        </DataGrid>
+                    </DockPanel>
                 </TabItem>
 
                 <!-- Titles Tab -->
                 <TabItem Header="{loc:Locale player.tab_titles}">
-                    <Border Classes="card" Padding="24" Margin="8"
-                            HorizontalAlignment="Center" VerticalAlignment="Center">
-                        <StackPanel Spacing="8" HorizontalAlignment="Center">
-                            <TextBlock Text="{loc:Locale player.section_titles}" Classes="sectionHeader" HorizontalAlignment="Center" />
-                            <TextBlock Text="{loc:Locale player.titles_placeholder}"
-                                       Foreground="{DynamicResource SemiColorText2}"
-                                       HorizontalAlignment="Center" />
+                    <DockPanel Margin="8">
+                        <StackPanel DockPanel.Dock="Top" Orientation="Horizontal" Spacing="8" Margin="0,0,0,8">
+                            <TextBlock Text="{loc:Locale player.section_titles}" Classes="sectionHeader" VerticalAlignment="Center" />
+                            <Button Content="{loc:Locale player.titles_unlock_all}" Command="{Binding UnlockAllTitlesCommand}" Margin="16,0,0,0" />
+                            <Button Content="{loc:Locale player.titles_lock_all}" Command="{Binding LockAllTitlesCommand}" />
                         </StackPanel>
-                    </Border>
+                        <DataGrid ItemsSource="{Binding TitleRows}"
+                                  AutoGenerateColumns="False"
+                                  SelectionMode="Single"
+                                  CanUserSortColumns="True"
+                                  IsReadOnly="False">
+                            <DataGrid.Columns>
+                                <DataGridTextColumn Header="ID" Binding="{Binding TitleId}" Width="120" IsReadOnly="True" />
+                                <DataGridTextColumn Header="Title" Binding="{Binding TitleName}" Width="*" IsReadOnly="True" />
+                                <DataGridTextColumn Header="Description" Binding="{Binding Description}" Width="*" IsReadOnly="True" />
+                                <DataGridCheckBoxColumn Header="Unlocked" Binding="{Binding IsUnlocked}" Width="80" />
+                            </DataGrid.Columns>
+                        </DataGrid>
+                    </DockPanel>
                 </TabItem>
             </TabControl>
         </DockPanel>

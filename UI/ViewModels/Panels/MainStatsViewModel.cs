@@ -1,7 +1,10 @@
+using System.Collections.ObjectModel;
+using System.Text;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using NMSE.Core;
 using NMSE.Data;
+using NMSE.IO;
 using NMSE.Models;
 
 namespace NMSE.UI.ViewModels.Panels;
@@ -10,9 +13,18 @@ public partial class MainStatsViewModel : PanelViewModelBase
 {
     private JsonObject? _saveData;
     private JsonObject? _playerState;
+    private JsonObject? _accountData;
+    private string? _saveFilePath;
+    private IconManager? _iconManager;
+
+    public event EventHandler? ReloadRequested;
 
     private static readonly string[] DifficultyPresets =
         { "Invalid", "Custom", "Normal", "Creative", "Relaxed", "Survival", "Permadeath" };
+
+    private static readonly string[] GuideCategories =
+        { "Survival Basics", "Getting Around", "Making Discoveries", "Upgrades & Crafting",
+          "Construction", "Making Money", "Alien Lifeforms", "Combat" };
 
     [ObservableProperty] private decimal _health;
     [ObservableProperty] private decimal _shield;
@@ -60,9 +72,28 @@ public partial class MainStatsViewModel : PanelViewModelBase
 
     [ObservableProperty] private string _statusText = "";
 
+    // Save Utilities
+    [ObservableProperty] private int _sourceSlotIndex;
+    [ObservableProperty] private int _destSlotIndex = 1;
+    [ObservableProperty] private int _transferPlatformIndex;
+    public List<string> SlotItems { get; } = Enumerable.Range(1, 15).Select(i => $"Slot {i}").ToList();
+    public List<string> PlatformItems { get; } = new() { "Steam", "GOG", "Xbox Game Pass", "PS4", "Switch" };
+
+    // Guides
+    [ObservableProperty] private ObservableCollection<GuideTopicViewModel> _guideTopics = new();
+    [ObservableProperty] private string _guideFilter = "";
+
+    // Titles
+    [ObservableProperty] private ObservableCollection<TitleRowViewModel> _titleRows = new();
+
+    public string PlayerName { get; private set; } = "Explorer";
+
+    public void SetSaveFilePath(string? path) => _saveFilePath = path;
+
     public override void LoadData(JsonObject saveData, GameItemDatabase database, IconManager? iconManager)
     {
         _saveData = saveData;
+        _iconManager = iconManager;
         try
         {
             var playerState = saveData.GetObject("PlayerStateData");
@@ -95,9 +126,11 @@ public partial class MainStatsViewModel : PanelViewModelBase
                 var owners = commonState?.GetArray("UsedDiscoveryOwnersV2");
                 if (owners != null && owners.Length > 0)
                     usn = owners.GetObject(0)?.GetString("USN") ?? "";
-                AccountName = string.IsNullOrEmpty(usn) ? "Explorer" : usn;
+                string displayName = string.IsNullOrEmpty(usn) ? "Explorer" : usn;
+                AccountName = displayName;
+                PlayerName = displayName;
             }
-            catch { AccountName = "Explorer"; }
+            catch { AccountName = "Explorer"; PlayerName = "Explorer"; }
 
             try
             {
@@ -427,4 +460,295 @@ public partial class MainStatsViewModel : PanelViewModelBase
         }
         catch { }
     }
+
+    // --- Save Utilities ---
+
+    private string? GetSaveDirectory() =>
+        _saveFilePath != null ? Path.GetDirectoryName(_saveFilePath) : null;
+
+    private SaveFileManager.Platform GetDetectedPlatform()
+    {
+        string? dir = GetSaveDirectory();
+        return dir != null ? SaveFileManager.DetectPlatform(dir) : SaveFileManager.Platform.Unknown;
+    }
+
+    private static SaveFileManager.Platform TransferPlatformFromIndex(int index) => index switch
+    {
+        0 => SaveFileManager.Platform.Steam,
+        1 => SaveFileManager.Platform.GOG,
+        2 => SaveFileManager.Platform.XboxGamePass,
+        3 => SaveFileManager.Platform.PS4,
+        4 => SaveFileManager.Platform.Switch,
+        _ => SaveFileManager.Platform.Unknown,
+    };
+
+    [RelayCommand]
+    private void CopySlot()
+    {
+        string? dir = GetSaveDirectory();
+        if (dir == null) { StatusText = UiStrings.Get("player.no_save_loaded"); return; }
+        if (SourceSlotIndex == DestSlotIndex) { StatusText = UiStrings.Get("player.slots_must_differ"); return; }
+        try
+        {
+            SaveSlotManager.CopySlot(dir, SourceSlotIndex, DestSlotIndex, GetDetectedPlatform());
+            StatusText = UiStrings.Format("player.copy_slot_success", SourceSlotIndex + 1, DestSlotIndex + 1);
+        }
+        catch (Exception ex) { StatusText = UiStrings.Format("player.copy_slot_failed", ex.Message); }
+    }
+
+    [RelayCommand]
+    private void MoveSlot()
+    {
+        string? dir = GetSaveDirectory();
+        if (dir == null) { StatusText = UiStrings.Get("player.no_save_loaded"); return; }
+        if (SourceSlotIndex == DestSlotIndex) { StatusText = UiStrings.Get("player.slots_must_differ"); return; }
+        try
+        {
+            SaveSlotManager.MoveSlot(dir, SourceSlotIndex, DestSlotIndex, GetDetectedPlatform());
+            StatusText = UiStrings.Format("player.move_slot_success", SourceSlotIndex + 1, DestSlotIndex + 1);
+            ReloadRequested?.Invoke(this, EventArgs.Empty);
+        }
+        catch (Exception ex) { StatusText = UiStrings.Format("player.move_slot_failed", ex.Message); }
+    }
+
+    [RelayCommand]
+    private void SwapSlots()
+    {
+        string? dir = GetSaveDirectory();
+        if (dir == null) { StatusText = UiStrings.Get("player.no_save_loaded"); return; }
+        if (SourceSlotIndex == DestSlotIndex) { StatusText = UiStrings.Get("player.slots_must_differ"); return; }
+        try
+        {
+            SaveSlotManager.SwapSlots(dir, SourceSlotIndex, DestSlotIndex, GetDetectedPlatform());
+            StatusText = UiStrings.Format("player.swap_slot_success", SourceSlotIndex + 1, DestSlotIndex + 1);
+            ReloadRequested?.Invoke(this, EventArgs.Empty);
+        }
+        catch (Exception ex) { StatusText = UiStrings.Format("player.swap_slot_failed", ex.Message); }
+    }
+
+    [RelayCommand]
+    private void DeleteSlot()
+    {
+        string? dir = GetSaveDirectory();
+        if (dir == null) { StatusText = UiStrings.Get("player.no_save_loaded"); return; }
+        try
+        {
+            SaveSlotManager.DeleteSlot(dir, SourceSlotIndex, GetDetectedPlatform());
+            StatusText = UiStrings.Format("player.delete_slot_success", SourceSlotIndex + 1);
+            ReloadRequested?.Invoke(this, EventArgs.Empty);
+        }
+        catch (Exception ex) { StatusText = UiStrings.Format("player.delete_slot_failed", ex.Message); }
+    }
+
+    public Func<Task<string?>>? PickFolderFunc { get; set; }
+
+    [RelayCommand]
+    private async Task TransferPlatform()
+    {
+        if (_saveFilePath == null) { StatusText = UiStrings.Get("player.no_save_loaded"); return; }
+        if (PickFolderFunc == null) return;
+
+        string? destDir = await PickFolderFunc();
+        if (string.IsNullOrEmpty(destDir)) return;
+
+        var destPlatform = TransferPlatformFromIndex(TransferPlatformIndex);
+        try
+        {
+            SaveSlotManager.TransferCrossPlatform(_saveFilePath, destDir, DestSlotIndex, destPlatform);
+            StatusText = UiStrings.Get("player.transfer_cross_complete");
+        }
+        catch (Exception ex) { StatusText = UiStrings.Format("player.transfer_cross_failed", ex.Message); }
+    }
+
+    // --- Guides ---
+
+    public void LoadAccountData(JsonObject accountData)
+    {
+        _accountData = accountData;
+        LoadGuides(accountData);
+        LoadTitles(accountData);
+    }
+
+    private void LoadGuides(JsonObject accountData)
+    {
+        GuideTopics.Clear();
+        try
+        {
+            var userData = accountData.GetObject("UserSettingsData");
+            if (userData == null) return;
+
+            var seenSet = new HashSet<string>(StringComparer.Ordinal);
+            var unlockedSet = new HashSet<string>(StringComparer.Ordinal);
+
+            var seenTopics = userData.GetArray("SeenWikiTopics");
+            var unlockedTopics = userData.GetArray("UnlockedWikiTopics");
+
+            if (seenTopics != null)
+                for (int i = 0; i < seenTopics.Length; i++)
+                    try { seenSet.Add(seenTopics.GetString(i)); } catch { }
+            if (unlockedTopics != null)
+                for (int i = 0; i < unlockedTopics.Length; i++)
+                    try { unlockedSet.Add(unlockedTopics.GetString(i)); } catch { }
+
+            var shown = new HashSet<string>(StringComparer.Ordinal);
+            foreach (var topic in WikiGuideDatabase.Topics)
+            {
+                shown.Add(topic.Id);
+                string category = WikiGuideDatabase.GetEnglishCategory(topic.Id);
+                GuideTopics.Add(new GuideTopicViewModel
+                {
+                    TopicId = topic.Id,
+                    Name = topic.Name,
+                    Category = category,
+                    IsSeen = seenSet.Contains(topic.Id),
+                    IsUnlocked = unlockedSet.Contains(topic.Id)
+                });
+            }
+
+            foreach (string topicId in seenSet.Union(unlockedSet))
+            {
+                if (!shown.Contains(topicId) && !string.IsNullOrEmpty(topicId))
+                {
+                    shown.Add(topicId);
+                    GuideTopics.Add(new GuideTopicViewModel
+                    {
+                        TopicId = topicId,
+                        Name = WikiGuideDatabase.GetTopicName(topicId),
+                        Category = WikiGuideDatabase.GetEnglishCategory(topicId),
+                        IsSeen = seenSet.Contains(topicId),
+                        IsUnlocked = unlockedSet.Contains(topicId)
+                    });
+                }
+            }
+        }
+        catch { }
+    }
+
+    [RelayCommand]
+    private void UnlockAllGuides()
+    {
+        foreach (var t in GuideTopics) { t.IsSeen = true; t.IsUnlocked = true; }
+        SyncGuidesToAccount();
+    }
+
+    [RelayCommand]
+    private void LockAllGuides()
+    {
+        foreach (var t in GuideTopics) { t.IsSeen = false; t.IsUnlocked = false; }
+        SyncGuidesToAccount();
+    }
+
+    public void SyncGuidesToAccount()
+    {
+        if (_accountData == null) return;
+        var userData = _accountData.GetObject("UserSettingsData");
+        if (userData == null) return;
+
+        var seenArr = userData.GetArray("SeenWikiTopics");
+        var unlockedArr = userData.GetArray("UnlockedWikiTopics");
+        if (seenArr == null || unlockedArr == null) return;
+
+        while (seenArr.Length > 0) seenArr.RemoveAt(seenArr.Length - 1);
+        while (unlockedArr.Length > 0) unlockedArr.RemoveAt(unlockedArr.Length - 1);
+
+        foreach (var topic in GuideTopics)
+        {
+            if (topic.IsSeen) seenArr.Add(topic.TopicId);
+            if (topic.IsUnlocked) unlockedArr.Add(topic.TopicId);
+        }
+    }
+
+    // --- Titles ---
+
+    private void LoadTitles(JsonObject accountData)
+    {
+        TitleRows.Clear();
+        if (!TitleDatabase.IsLoaded) return;
+
+        try
+        {
+            var userData = accountData.GetObject("UserSettingsData") ?? accountData;
+            var unlockedTitles = userData.GetArray("UnlockedTitles");
+            var unlockedSet = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            if (unlockedTitles != null)
+            {
+                for (int i = 0; i < unlockedTitles.Length; i++)
+                {
+                    string? titleId = ExtractStringValue(unlockedTitles.Get(i));
+                    if (!string.IsNullOrEmpty(titleId))
+                    {
+                        if (titleId.StartsWith('^'))
+                            titleId = titleId[1..];
+                        unlockedSet.Add(titleId);
+                    }
+                }
+            }
+
+            foreach (var title in TitleDatabase.Titles)
+            {
+                TitleRows.Add(new TitleRowViewModel
+                {
+                    TitleId = title.Id,
+                    TitleName = string.Format(title.Name, PlayerName),
+                    Description = title.UnlockDescription,
+                    IsUnlocked = unlockedSet.Contains(title.Id)
+                });
+            }
+        }
+        catch { }
+    }
+
+    private static string? ExtractStringValue(object? value)
+    {
+        if (value is string s) return s;
+        if (value is BinaryData bin) return Encoding.Latin1.GetString(bin.ToByteArray());
+        return value?.ToString();
+    }
+
+    [RelayCommand]
+    private void UnlockAllTitles()
+    {
+        foreach (var t in TitleRows) t.IsUnlocked = true;
+        SyncTitlesToAccount();
+    }
+
+    [RelayCommand]
+    private void LockAllTitles()
+    {
+        foreach (var t in TitleRows) t.IsUnlocked = false;
+        SyncTitlesToAccount();
+    }
+
+    public void SyncTitlesToAccount()
+    {
+        if (_accountData == null) return;
+        var userData = _accountData.GetObject("UserSettingsData") ?? _accountData;
+        var unlockedTitles = userData.GetArray("UnlockedTitles");
+        if (unlockedTitles == null) return;
+
+        while (unlockedTitles.Length > 0) unlockedTitles.RemoveAt(unlockedTitles.Length - 1);
+
+        foreach (var row in TitleRows)
+        {
+            if (row.IsUnlocked)
+                unlockedTitles.Add("^" + row.TitleId);
+        }
+    }
+}
+
+public partial class GuideTopicViewModel : ObservableObject
+{
+    [ObservableProperty] private string _topicId = "";
+    [ObservableProperty] private string _name = "";
+    [ObservableProperty] private string _category = "";
+    [ObservableProperty] private bool _isSeen;
+    [ObservableProperty] private bool _isUnlocked;
+}
+
+public partial class TitleRowViewModel : ObservableObject
+{
+    [ObservableProperty] private string _titleId = "";
+    [ObservableProperty] private string _titleName = "";
+    [ObservableProperty] private string _description = "";
+    [ObservableProperty] private bool _isUnlocked;
 }

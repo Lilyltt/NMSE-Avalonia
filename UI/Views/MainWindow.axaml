@@ -34,12 +34,12 @@
             <MenuItem Header="{loc:Locale menu.edit}">
                 <MenuItem Header="{loc:Locale menu.edit.reload}" Command="{Binding ReloadCommand}" HotKey="F5"
                           IsEnabled="{Binding IsSaveLoaded}" />
-                <MenuItem Header="{loc:Locale menu.edit.restore_backup_all}" IsEnabled="{Binding IsSaveLoaded}" />
-                <MenuItem Header="{loc:Locale menu.edit.restore_backup_single}" IsEnabled="{Binding IsSaveLoaded}" />
+                <MenuItem Header="{loc:Locale menu.edit.restore_backup_all}" Command="{Binding RestoreBackupAllCommand}" IsEnabled="{Binding IsSaveLoaded}" />
+                <MenuItem Header="{loc:Locale menu.edit.restore_backup_single}" Command="{Binding RestoreBackupSingleCommand}" IsEnabled="{Binding IsSaveLoaded}" />
             </MenuItem>
             <MenuItem Header="{loc:Locale menu.tools}">
-                <MenuItem Header="{loc:Locale menu.tools.export_json}" IsEnabled="{Binding IsSaveLoaded}" />
-                <MenuItem Header="{loc:Locale menu.tools.import_json}" />
+                <MenuItem Header="{loc:Locale menu.tools.export_json}" Command="{Binding ExportJsonCommand}" IsEnabled="{Binding IsSaveLoaded}" />
+                <MenuItem Header="{loc:Locale menu.tools.import_json}" Command="{Binding ImportJsonCommand}" />
             </MenuItem>
             <MenuItem Header="{loc:Locale menu.language}" x:Name="LanguageMenu" />
             <MenuItem Header="{loc:Locale menu.view}">
@@ -53,7 +53,7 @@
                 <Separator />
                 <MenuItem Header="{loc:Locale menu.help.sponsor}" Command="{Binding OpenSponsorCommand}" />
                 <Separator />
-                <MenuItem Header="{loc:Locale menu.help.check_updates}" />
+                <MenuItem Header="{loc:Locale menu.help.check_updates}" Command="{Binding CheckForUpdatesCommand}" />
                 <Separator />
                 <MenuItem Header="{loc:Locale menu.help.about}" Click="OnAbout" />
             </MenuItem>
@@ -99,38 +99,39 @@
         </Border>
 
         <!-- Main Content: Sidebar Nav + Panel Content -->
-        <Grid ColumnDefinitions="Auto,*">
-            <!-- Sidebar Navigation -->
-            <Border Grid.Column="0" Width="{Binding NavWidth}" BorderThickness="0,0,1,0"
-                    BorderBrush="{DynamicResource SemiColorBorder}"
-                    Background="{DynamicResource SemiColorNavBackground}">
-                <DockPanel>
-                    <Button DockPanel.Dock="Top" Command="{Binding ToggleNavCommand}"
-                            Classes="navToggle"
-                            Classes.expanded="{Binding IsNavExpanded}"
-                            Margin="4,4,4,0">
-                        <PathIcon Width="14" Height="14"
-                                  Data="M3,18H21V16H3V18M3,13H21V11H3V13M3,6V8H21V6H3Z" />
-                    </Button>
-                    <ListBox ItemsSource="{Binding NavItems}"
-                             SelectedIndex="{Binding SelectedNavIndex}"
-                             Margin="4" ScrollViewer.HorizontalScrollBarVisibility="Disabled">
-                        <ListBox.ItemTemplate>
-                            <DataTemplate x:DataType="vm:NavItem">
-                                <StackPanel Orientation="Horizontal" Spacing="10">
-                                    <PathIcon Data="{Binding IconPath}" Width="16" Height="16" />
-                                    <TextBlock Text="{Binding Name}" VerticalAlignment="Center"
-                                               IsVisible="{Binding $parent[Window].((vm:MainWindowViewModel)DataContext).IsNavExpanded}" />
-                                </StackPanel>
-                            </DataTemplate>
-                        </ListBox.ItemTemplate>
-                    </ListBox>
-                </DockPanel>
-            </Border>
+        <Panel>
+            <Grid ColumnDefinitions="Auto,*">
+                <!-- Sidebar Navigation -->
+                <Border Grid.Column="0" Width="{Binding NavWidth}" BorderThickness="0,0,1,0"
+                        BorderBrush="{DynamicResource SemiColorBorder}"
+                        Background="{DynamicResource SemiColorNavBackground}">
+                    <DockPanel>
+                        <Button DockPanel.Dock="Top" Command="{Binding ToggleNavCommand}"
+                                Classes="navToggle"
+                                Classes.expanded="{Binding IsNavExpanded}"
+                                Margin="4,4,4,0">
+                            <PathIcon Width="14" Height="14"
+                                      Data="M3,18H21V16H3V18M3,13H21V11H3V13M3,6V8H21V6H3Z" />
+                        </Button>
+                        <ListBox ItemsSource="{Binding NavItems}"
+                                 SelectedIndex="{Binding SelectedNavIndex}"
+                                 Margin="4" ScrollViewer.HorizontalScrollBarVisibility="Disabled">
+                            <ListBox.ItemTemplate>
+                                <DataTemplate x:DataType="vm:NavItem">
+                                    <StackPanel Orientation="Horizontal" Spacing="10">
+                                        <PathIcon Data="{Binding IconPath}" Width="16" Height="16" />
+                                        <TextBlock Text="{Binding Name}" VerticalAlignment="Center"
+                                                   IsVisible="{Binding $parent[Window].((vm:MainWindowViewModel)DataContext).IsNavExpanded}" />
+                                    </StackPanel>
+                                </DataTemplate>
+                            </ListBox.ItemTemplate>
+                        </ListBox>
+                    </DockPanel>
+                </Border>
 
-            <!-- Content Area -->
-            <ContentControl Grid.Column="1" Content="{Binding SelectedPanel}" Margin="8">
-                <ContentControl.DataTemplates>
+                <!-- Content Area -->
+                <ContentControl Grid.Column="1" Content="{Binding SelectedPanel}" Margin="8">
+                    <ContentControl.DataTemplates>
                     <DataTemplate DataType="pvm:MainStatsViewModel">
                         <views:MainStatsView />
                     </DataTemplate>
@@ -179,8 +180,21 @@
                     <DataTemplate DataType="pvm:RawJsonViewModel">
                         <views:RawJsonView />
                     </DataTemplate>
-                </ContentControl.DataTemplates>
-            </ContentControl>
-        </Grid>
+                    </ContentControl.DataTemplates>
+                </ContentControl>
+            </Grid>
+
+            <!-- Loading Overlay -->
+            <Border IsVisible="{Binding IsLoading}"
+                    Background="#80000000"
+                    HorizontalAlignment="Stretch" VerticalAlignment="Stretch">
+                <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center" Spacing="12">
+                    <ProgressBar IsIndeterminate="True" Width="200" Height="6" />
+                    <TextBlock Text="{Binding LoadingMessage}"
+                               Foreground="White" FontSize="14"
+                               HorizontalAlignment="Center" />
+                </StackPanel>
+            </Border>
+        </Panel>
     </DockPanel>
 </Window>

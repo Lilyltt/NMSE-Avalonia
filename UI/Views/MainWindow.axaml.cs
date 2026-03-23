@@ -27,6 +27,105 @@ public partial class MainWindow : Window
                 Position = new PixelPoint(x, y);
             }
 
+            _viewModel.SaveFilePickerFunc = async () =>
+            {
+                var file = await StorageProvider.SaveFilePickerAsync(new FilePickerSaveOptions
+                {
+                    Title = "Export JSON",
+                    DefaultExtension = "json",
+                    FileTypeChoices = new[]
+                    {
+                        new FilePickerFileType("JSON Files") { Patterns = new[] { "*.json" } },
+                        new FilePickerFileType("All Files") { Patterns = new[] { "*" } }
+                    }
+                });
+                return file?.TryGetLocalPath();
+            };
+
+            _viewModel.OpenFilePickerFunc = async () =>
+            {
+                var files = await StorageProvider.OpenFilePickerAsync(new FilePickerOpenOptions
+                {
+                    Title = "Import JSON",
+                    AllowMultiple = false,
+                    FileTypeFilter = new[]
+                    {
+                        new FilePickerFileType("JSON Files") { Patterns = new[] { "*.json" } },
+                        new FilePickerFileType("All Files") { Patterns = new[] { "*" } }
+                    }
+                });
+                return files.Count > 0 ? files[0].TryGetLocalPath() : null;
+            };
+
+            _viewModel.MainStats.PickFolderFunc = async () =>
+            {
+                var folders = await StorageProvider.OpenFolderPickerAsync(new FolderPickerOpenOptions
+                {
+                    Title = "Select Destination Directory",
+                    AllowMultiple = false
+                });
+                return folders.Count > 0 ? folders[0].TryGetLocalPath() : null;
+            };
+
+            WirePanelFilePickers(_viewModel.Companion);
+            WirePanelFilePickers(_viewModel.Settlement);
+            WirePanelFilePickers(_viewModel.ByteBeat);
+            WirePanelFilePickers(_viewModel.Base);
+
+            _viewModel.Base.ShowObjectPickerFunc = async (items) =>
+            {
+                var tcs = new TaskCompletionSource<int>();
+                var dialog = new Window
+                {
+                    Title = NMSE.Data.UiStrings.Get("base.select_target"),
+                    Width = 400,
+                    Height = 350,
+                    WindowStartupLocation = WindowStartupLocation.CenterOwner,
+                    CanResize = false
+                };
+
+                var listBox = new ListBox
+                {
+                    ItemsSource = items,
+                    SelectedIndex = 0,
+                    Margin = new Thickness(8)
+                };
+
+                var okButton = new Button
+                {
+                    Content = "OK",
+                    HorizontalAlignment = Avalonia.Layout.HorizontalAlignment.Right,
+                    Margin = new Thickness(8),
+                    MinWidth = 80
+                };
+
+                okButton.Click += (_, _) =>
+                {
+                    tcs.TrySetResult(listBox.SelectedIndex);
+                    dialog.Close();
+                };
+
+                dialog.Closing += (_, _) => tcs.TrySetResult(-1);
+
+                var panel = new DockPanel();
+                DockPanel.SetDock(okButton, Avalonia.Controls.Dock.Bottom);
+                panel.Children.Add(okButton);
+                panel.Children.Add(listBox);
+                dialog.Content = panel;
+
+                await dialog.ShowDialog(this);
+                return await tcs.Task;
+            };
+
+            _viewModel.ShutdownApp = () =>
+            {
+                if (Avalonia.Application.Current?.ApplicationLifetime is
+                    Avalonia.Controls.ApplicationLifetimes.IClassicDesktopStyleApplicationLifetime desktop)
+                {
+                    desktop.Shutdown();
+                }
+            };
+
             await _viewModel.InitializeAsync();
             BuildLanguageMenu();
         };
@@ -120,6 +219,55 @@ public partial class MainWindow : Window
         }
     }
 
+    private void WirePanelFilePickers(ViewModels.Panels.PanelViewModelBase panel)
+    {
+        panel.SaveFilePickerFunc = async (title, defaultExt, filterDesc) =>
+        {
+            var file = await StorageProvider.SaveFilePickerAsync(new FilePickerSaveOptions
+            {
+                Title = title,
+                DefaultExtension = defaultExt,
+                FileTypeChoices = new[]
+                {
+                    new FilePickerFileType(filterDesc) { Patterns = new[] { $"*.{defaultExt}" } },
+                    new FilePickerFileType("All Files") { Patterns = new[] { "*" } }
+                }
+            });
+            return file?.TryGetLocalPath();
+        };
+
+        panel.OpenFilePickerFunc = async (title, filterDesc) =>
+        {
+            var patterns = new List<string>();
+            foreach (var part in filterDesc.Split('|'))
+            {
+                var trimmed = part.Trim();
+                if (trimmed.StartsWith("*.")) patterns.Add(trimmed);
+                else if (trimmed.Contains("*."))
+                {
+                    foreach (var token in trimmed.Split(';'))
+                    {
+                        var t = token.Trim();
+                        if (t.StartsWith("*.")) patterns.Add(t);
+                    }
+                }
+            }
+            if (patterns.Count == 0) patterns.Add("*");
+
+            var files = await StorageProvider.OpenFilePickerAsync(new FilePickerOpenOptions
+            {
+                Title = title,
+                AllowMultiple = false,
+                FileTypeFilter = new[]
+                {
+                    new FilePickerFileType(title) { Patterns = patterns },
+                    new FilePickerFileType("All Files") { Patterns = new[] { "*" } }
+                }
+            });
+            return files.Count > 0 ? files[0].TryGetLocalPath() : null;
+        };
+    }
+
     private async void OnAbout(object? sender, RoutedEventArgs e)
     {
         var aboutWindow = new Window
@@ -145,7 +293,7 @@ public partial class MainWindow : Window
                         Text = $"Build {BuildInfo.VerMajor}.{BuildInfo.VerMinor}.{BuildInfo.VerPatch} ({MainWindowViewModel.SuppGameRel})"
                     },
                     new TextBlock { Text = "" },
-                    new TextBlock { Text = "by vector_cmdr" },
+                    new TextBlock { Text = "by vector_cmdr, TowaNoah" },
                     new TextBlock
                     {
                         Text = MainWindowViewModel.GitHubCreatorUrl,

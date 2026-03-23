@@ -122,6 +122,8 @@
                             <Button Content="{loc:Locale common.apply}" Command="{Binding SaveCompanionChangesCommand}" />
                             <Button Content="{loc:Locale companion.reset_accessory}" Command="{Binding ResetAccessoryCommand}" />
                             <Button Content="{loc:Locale companion.delete}" Command="{Binding DeleteCompanionCommand}" />
+                            <Button Content="{loc:Locale common.export}" Command="{Binding ExportCompanionCommand}" />
+                            <Button Content="{loc:Locale common.import}" Command="{Binding ImportCompanionCommand}" />
                         </StackPanel>
                     </StackPanel>
                 </ScrollViewer>

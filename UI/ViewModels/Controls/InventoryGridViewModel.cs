@@ -34,6 +34,11 @@ public partial class InventorySlotViewModel : ObservableObject
     [ObservableProperty] private string _description = "";
     [ObservableProperty] private string _position = "";
 
+    // Adjacency border
+    [ObservableProperty] private Avalonia.Thickness _adjBorderThickness;
+    [ObservableProperty] private string _adjBorderColor = "Transparent";
+    [ObservableProperty] private bool _hasAdjacencyBorder;
+
     public JsonObject? SlotData { get; set; }
     public int SlotIndex { get; set; }
 }
@@ -161,6 +166,48 @@ public partial class InventoryGridViewModel : ObservableObject
                 }
 
                 SlotCells.Add(CreateEmptySlotViewModel(col, row, isEnabled, isSupercharged));
+            }
+        }
+
+        if (_isTechInventory)
+            ComputeAdjacencyBorders();
+    }
+
+    private void ComputeAdjacencyBorders()
+    {
+        var slotGrid = new Dictionary<(int col, int row), InventorySlotViewModel>();
+        foreach (var cell in SlotCells)
+            slotGrid[(cell.GridCol, cell.GridRow)] = cell;
+
+        foreach (var cell in SlotCells)
+        {
+            cell.HasAdjacencyBorder = false;
+            cell.AdjBorderThickness = default;
+            cell.AdjBorderColor = "Transparent";
+
+            if (cell.IsEmpty || string.IsNullOrEmpty(cell.ItemId)) continue;
+
+            var adjInfo = TechAdjacencyDatabase.GetAdjacencyInfo(cell.ItemId);
+            if (adjInfo == null) continue;
+
+            bool CheckNeighbor(int nc, int nr)
+            {
+                if (!slotGrid.TryGetValue((nc, nr), out var neighbor)) return false;
+                if (neighbor.IsEmpty || string.IsNullOrEmpty(neighbor.ItemId)) return false;
+                var nAdj = TechAdjacencyDatabase.GetAdjacencyInfo(neighbor.ItemId);
+                return nAdj != null && nAdj.BaseStatType == adjInfo.BaseStatType;
+            }
+
+            double top = CheckNeighbor(cell.GridCol, cell.GridRow - 1) ? 2 : 0;
+            double bottom = CheckNeighbor(cell.GridCol, cell.GridRow + 1) ? 2 : 0;
+            double left = CheckNeighbor(cell.GridCol - 1, cell.GridRow) ? 2 : 0;
+            double right = CheckNeighbor(cell.GridCol + 1, cell.GridRow) ? 2 : 0;
+
+            if (top > 0 || bottom > 0 || left > 0 || right > 0)
+            {
+                cell.AdjBorderThickness = new Avalonia.Thickness(left, top, right, bottom);
+                cell.AdjBorderColor = adjInfo.LinkColourHex;
+                cell.HasAdjacencyBorder = true;
             }
         }
     }

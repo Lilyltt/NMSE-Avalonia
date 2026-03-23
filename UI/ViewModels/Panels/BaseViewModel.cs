@@ -199,6 +199,116 @@ public partial class BaseViewModel : PanelViewModelBase
         }
     }
 
+    public Func<List<string>, Task<int>>? ShowObjectPickerFunc { get; set; }
+
+    [RelayCommand]
+    private async Task MoveBaseComputer()
+    {
+        if (SelectedBase?.Data == null) return;
+        try
+        {
+            var objects = SelectedBase.Data.GetArray("Objects");
+            if (objects == null || objects.Length == 0)
+            {
+                return;
+            }
+
+            var candidates = new List<(string id, JsonObject data, int index)>();
+            for (int i = 0; i < objects.Length; i++)
+            {
+                try
+                {
+                    var obj = objects.GetObject(i);
+                    string objectId = obj.GetString("ObjectID") ?? "";
+                    if (!string.IsNullOrEmpty(objectId) && objectId != "^BASE_FLAG")
+                        candidates.Add((objectId, obj, i));
+                }
+                catch { }
+            }
+
+            if (candidates.Count == 0 || ShowObjectPickerFunc == null) return;
+
+            var displayNames = candidates.Select(c => c.id).ToList();
+            int selectedIdx = await ShowObjectPickerFunc(displayNames);
+            if (selectedIdx < 0 || selectedIdx >= candidates.Count) return;
+
+            var target = candidates[selectedIdx];
+
+            JsonObject? baseFlag = null;
+            for (int i = 0; i < objects.Length; i++)
+            {
+                try
+                {
+                    var obj = objects.GetObject(i);
+                    if (obj.GetString("ObjectID") == "^BASE_FLAG")
+                    {
+                        baseFlag = obj;
+                        break;
+                    }
+                }
+                catch { }
+            }
+
+            if (baseFlag == null) return;
+
+            BaseLogic.SwapPositions(baseFlag, target.data);
+
+            int objectCount = 0;
+            try
+            {
+                var objs = SelectedBase.Data.GetArray("Objects");
+                if (objs != null) objectCount = objs.Length;
+            }
+            catch { }
+            BaseItemCount = objectCount.ToString();
+        }
+        catch { }
+    }
+
+    [RelayCommand]
+    private async Task ExportBase()
+    {
+        if (SelectedBase?.Data == null || SaveFilePickerFunc == null) return;
+        var cfg = ExportConfig.Instance;
+        string? path = await SaveFilePickerFunc("Backup Base", "json",
+            "NMS Base Backup (*.json)|*.json|All Files (*.*)|*.*");
+        if (string.IsNullOrEmpty(path)) return;
+        try { SelectedBase.Data.ExportToFile(path); } catch { }
+    }
+
+    [RelayCommand]
+    private async Task ImportBase()
+    {
+        if (SelectedBase?.Data == null || OpenFilePickerFunc == null) return;
+        string? path = await OpenFilePickerFunc("Restore Base",
+            "NMS Base Backup (*.json)|*.json|All Files (*.*)|*.*");
+        if (string.IsNullOrEmpty(path)) return;
+        try
+        {
+            var imported = JsonObject.ImportFromFile(path);
+            if (imported.Contains("Objects"))
+                SelectedBase.Data.Set("Objects", imported.Get("Objects"));
+            if (imported.Contains("BaseVersion"))
+                SelectedBase.Data.Set("BaseVersion", imported.Get("BaseVersion"));
+            if (imported.Contains("Name"))
+            {
+                SelectedBase.Data.Set("Name", imported.Get("Name"));
+                BaseName = imported.GetString("Name") ?? BaseName;
+                SelectedBase.DisplayName = BaseName;
+            }
+
+            int objectCount = 0;
+            try
+            {
+                var objects = SelectedBase.Data.GetArray("Objects");
+                if (objects != null) objectCount = objects.Length;
+            }
+            catch { }
+            BaseItemCount = objectCount.ToString();
+        }
+        catch { }
+    }
+
     [RelayCommand]
     private void SaveBaseName()
     {

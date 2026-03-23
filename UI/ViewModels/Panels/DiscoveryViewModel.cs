@@ -14,6 +14,8 @@ public partial class DiscoveryViewModel : PanelViewModelBase
 
     [ObservableProperty] private int _selectedTabIndex;
 
+    public RecipeViewModel Recipe { get; } = new();
+
     [ObservableProperty] private ObservableCollection<DiscoveryItemViewModel> _knownTechs = new();
     [ObservableProperty] private ObservableCollection<DiscoveryItemViewModel> _knownProducts = new();
     [ObservableProperty] private ObservableCollection<GlyphViewModel> _glyphs = new();
@@ -30,6 +32,7 @@ public partial class DiscoveryViewModel : PanelViewModelBase
     public override void LoadData(JsonObject saveData, GameItemDatabase database, IconManager? iconManager)
     {
         _database = database;
+        Recipe.LoadData(saveData, database, iconManager);
         try
         {
             var playerState = saveData.GetObject("PlayerStateData");

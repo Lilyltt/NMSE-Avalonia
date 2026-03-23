@@ -205,6 +205,46 @@ public partial class ByteBeatViewModel : PanelViewModelBase
     }
 
     [RelayCommand]
+    private async Task ExportSong()
+    {
+        if (_mySongs == null || SelectedSongIndex < 0 || SelectedSongIndex >= _mySongs.Length || SaveFilePickerFunc == null) return;
+        SaveCurrentSong();
+        var song = _mySongs.GetObject(SelectedSongIndex);
+        var cfg = ExportConfig.Instance;
+        var vars = new Dictionary<string, string>
+        {
+            ["name"] = song.GetString("Name") ?? "song",
+            ["timestamp"] = DateTimeOffset.UtcNow.ToUnixTimeSeconds().ToString()
+        };
+        string? path = await SaveFilePickerFunc("Export Song", cfg.ByteBeatExt.TrimStart('.'),
+            ExportConfig.BuildDialogFilter(cfg.ByteBeatExt, "ByteBeat songs"));
+        if (string.IsNullOrEmpty(path)) return;
+        try { song.ExportToFile(path); } catch { }
+    }
+
+    [RelayCommand]
+    private async Task ImportSong()
+    {
+        int idx = SelectedSongIndex;
+        if (idx < 0 || _mySongs == null || idx >= _mySongs.Length || OpenFilePickerFunc == null) return;
+        string? path = await OpenFilePickerFunc("Import Song",
+            ExportConfig.BuildOpenFilter(ExportConfig.Instance.ByteBeatExt, "ByteBeat songs"));
+        if (string.IsNullOrEmpty(path)) return;
+        try
+        {
+            var imported = JsonObject.ImportFromFile(path);
+            var song = _mySongs.GetObject(idx);
+            foreach (var propName in imported.Names())
+                song.Set(propName, imported.Get(propName));
+
+            _previousSongIndex = -1;
+            OnSelectedSongIndexChanged(idx);
+            RefreshSongList();
+        }
+        catch { }
+    }
+
+    [RelayCommand]
     private void DeleteSong()
     {
         int idx = SelectedSongIndex;
