@@ -67,15 +67,7 @@ jobs:
           PUBLISH_DIR="${{ steps.publish.outputs.PUBLISH_DIR }}"
           OUTPUT_FILE="$GITHUB_WORKSPACE/NMSE-x86_64.AppImage"
           scripts/linux/build-appimage.sh "$PUBLISH_DIR" "$OUTPUT_FILE"
-          # The script may fall back to .tar.gz if appimagetool is unavailable
-          if [[ -f "$OUTPUT_FILE" ]]; then
-            echo "APPIMAGE_PATH=$OUTPUT_FILE" >> $GITHUB_OUTPUT
-          elif [[ -f "${OUTPUT_FILE%.AppImage}.tar.gz" ]]; then
-            echo "APPIMAGE_PATH=${OUTPUT_FILE%.AppImage}.tar.gz" >> $GITHUB_OUTPUT
-          else
-            echo "ERROR: No output file produced by build-appimage.sh"
-            exit 1
-          fi
+          echo "APPIMAGE_PATH=$OUTPUT_FILE" >> $GITHUB_OUTPUT
 
       - name: Upload AppImage artifact
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
