@@ -189,7 +189,7 @@ jobs:
           $ver = "${{ steps.version.outputs.VERSION }}"
 
           # Rename AppImage to match win build
-          Rename-Item -Path "NMSE-x64.AppImage" -NewName "NMSE-x64-${{ steps.version.outputs.VERSION }}-${{ env.BUILD_CONFIGURATION}}.AppImage"
+          Rename-Item -Path "NMSE-x64.AppImage" -NewName "NMSE-${{ steps.version.outputs.VERSION }}-${{ env.BUILD_CONFIGURATION}}-x64.AppImage"
 
           # Check whether this version tag already exists
           $existing = gh release view $tag 2>&1
