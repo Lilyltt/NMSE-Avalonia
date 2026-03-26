@@ -38,6 +38,8 @@ on:
       - "IO/**"
       - "Models/**"
       - "UI/**"
+      # Temporary for testing
+      - ".github/**"
       # Shared resources consumed by NMSE
       - "Resources/**"
       # Version file (PRs that bump version should also be validated)
