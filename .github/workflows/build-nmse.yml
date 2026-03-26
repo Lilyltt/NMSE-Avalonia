@@ -1,7 +1,10 @@
 # --------------------------------------------------------------
 # NMSE Release Build Workflow
-# Builds, tests, zips, and publishes a GitHub Release whenever
-# version.json is updated on the default branch.
+# Builds, tests, publishes (Native AOT), and creates a GitHub
+# Release whenever version.json is updated on the default branch.
+#
+# The publish step produces a fully self-contained, trimmed,
+# Native AOT executable - users do not need .NET installed.
 #
 # Each release is tagged with a semantic version (e.g. v1.2.3)
 # derived from version.json.  The release body is read from
@@ -12,7 +15,7 @@
 # and the version comment.
 # --------------------------------------------------------------
 
-name: Build NMSE (Plus Linxu)
+name: Build NMSE
 
 env:
   PROJECT_NAME: NMSE
