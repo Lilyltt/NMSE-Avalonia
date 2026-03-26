@@ -8,6 +8,9 @@ assignees: ''
 
 ## 📋 Guidelines
 
+<!-- You don't need to fill the below brackets
+     they will show as tick boxes when you post the issue -->
+
 - [ ] I have checked that this feature is not included in the [latest release of NMSE](https://github.com/vectorcmdr/NMSE/releases/latest).
 - [ ] I have [searched the issue tracker for open and closed issues](https://github.com/vectorcmdr/NMSE/issues) that are similar to this feature request, without success.
 - [ ] I have searched the [documentation](https://github.com/vectorcmdr/NMSE/blob/main/README.md#-documentation) so see if this feature is present, without success.
