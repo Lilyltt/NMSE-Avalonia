@@ -18,8 +18,11 @@
 		     The net10.0-windows TFM already ensures Windows-only, but some analyzer
 		     configurations still emit false positives for WinForms API calls.
 		     IL2026/IL2104/IL3050 are AOT/trimmer warnings from WinForms internals that
-		     are safe to suppress (Microsoft's WinForms SDK handles these at publish). -->
-		<NoWarn>$(NoWarn);CA1416;IL2026;IL2104;IL3050</NoWarn>
+		     are safe to suppress (Microsoft's WinForms SDK handles these at publish).
+		     IL3000 (Assembly.Location returns empty in single-file) and IL3053 (assembly
+		     AOT analysis warnings) come from WinForms/runtime internals and are not
+		     actionable in user code. -->
+		<NoWarn>$(NoWarn);CA1416;IL2026;IL2104;IL3050;IL3000;IL3053</NoWarn>
 
 		<!-- Native AOT compilation: produces a fully native executable with no .NET
 		     runtime dependency.  Users do not need .NET 10 installed.  Takes effect
@@ -39,6 +42,17 @@
 
 		<!-- Version is read from version.json at build time by the GenerateBuildInfo target -->
 	</PropertyGroup>
+
+	<!-- Suppress ILC-level AOT/single-file warnings from WinForms and runtime
+	     assemblies during Native AOT compilation.  The NoWarn property above
+	     handles Roslyn analyzer warnings, but ILC emits its own diagnostics
+	     that bypass NoWarn.  Passing nowarn args directly to ILC silences them.
+	     IL3000: Assembly.Location returns empty in single-file (WinForms internals)
+	     IL3053: Assembly produced AOT analysis warnings (System.Formats.Nrbf) -->
+	<ItemGroup>
+		<IlcArg Include="--nowarn:IL3000" />
+		<IlcArg Include="--nowarn:IL3053" />
+	</ItemGroup>
 
 	<ItemGroup>
 		<Compile Remove="NMSE.Tests\**" />
