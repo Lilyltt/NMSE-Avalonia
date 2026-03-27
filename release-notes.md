@@ -1,10 +1,40 @@
-## NMSE — No Man's Save Editor v1.0.362 (preview)
+## NMSE — No Man's Save Editor v1.0.368 (preview)
+
+> This is a preview build. Please practice safe backup practices and expect some bugs.
+
+### Changelog
+
+#### Features:
+
+- Introduces additions to the Settlement Panel:
+    - Sub panel added.
+    - Additional stats in stats panel.
+    - Clamps loosened on stats with color indicators for outside of "game rules" bounds.
+    - Production moved to it's own tab.
+    - Building States (experimental) tab added. Contains initial reverse engineered state data and an ability to set building states from list or integer.
+    - Building Editor (experimental) tab added. Contains the same reverse engineered states but with the ability to set each bit in the bitflag (for custom states).
+
+#### Bug Fixes:
+
+- Fix for XBOX Game Pass save paths (add current path and leave support for legacy install paths). (Issue [#18](https://github.com/vectorcmdr/NMSE/issues/18))
+- Fixes for locale/cultural input settings (InvariantCulture) in many places. Apologies to our European friends! (Issue [#13](https://github.com/vectorcmdr/NMSE/issues/13))
+- Fix for Corvette Technology losing it's proper icon on drag-and-drop operations. (Issue [#19](https://github.com/vectorcmdr/NMSE/issues/19))
+- Fix for Corvette Import/Export (TS<->Seed tolerance for imprecision). (Issue [#17](https://github.com/vectorcmdr/NMSE/issues/17))
+- Data integrity fixes for values exceeding internal clamps in saves if not edited directly (bypass clamping validation).
+- Add additional safety for images in memory (if corruption in memory occurs).
+- Minor buttons resize fixes. (Issue [#9](https://github.com/vectorcmdr/NMSE/issues/9))
+
+<br />
+
+
+<details>
+<summary>Previous Changelog 1.0.362 (preview)</summary>
 
 ### Changelog
 
 - Fixed Frigates AOT trimming error due to use of `DisplayMember` (reflection metadata was stripped) in favour of overrides only.
 
-<br />
+</details>
 
 <details>
 <summary>Previous Changelog 1.0.361 (preview)</summary>
@@ -72,12 +102,12 @@ Happy travels interlopers! 👨‍🚀
 
 User guides are available from the [repo](https://github.com/vectorcmdr/NMSE/blob/main/docs/user/README.md), or via the [website](https://nmse.vectorcmdr.xyz/).
 
-Download via **Assets** below.
+Download via **Assets** below (for Windows and Linux).
 
-> Linux and macOS users can run NMSE via Wine — see the [guides](https://github.com/vectorcmdr/NMSE#-cross-platform-via-wine).
+> Linux and macOS users can also run NMSE via Wine — see the [guides](https://github.com/vectorcmdr/NMSE#-cross-platform-via-wine).
 
 > 🛡️ VirusTotal scans for peace of mind are pending [here](#): pending...
 
 <!-- 
-> 🛡️ VirusTotal scans for peace of mind are available [here](https://www.virustotal.com/gui/file/86a36fc8dc34134403b86909814623c14b22d381b9c3bb53bd15806206806298?nocache=1): passed ✔️
+> 🛡️ VirusTotal scans for peace of mind are available [here](https://www.virustotal.com/gui/file/86a36fc8dc34134403b86909814623c14b22d381b9c3bb53bd15806206806298?nocache=1): passing ✔️
  -->
