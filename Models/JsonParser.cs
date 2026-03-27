@@ -522,8 +522,9 @@ public static class JsonParser
                                 if (hasStringContent) sb.Append((char)c);
                                 if (trackBytes) AppendByte(ref byteBuffer, ref byteCount, (byte)c);
                                 // Note: \u00XX escapes are intentional Unicode, NOT raw binary.
-                                // Do NOT set hasHighBytes here — only raw source bytes >= 0x80
-                                // (from Latin-1 decoded binary payloads) should trigger BinaryData.
+                                // Do NOT set hasHighBytes here.
+                                // Only raw source bytes >= 0x80 (from Latin-1 decoded binary payloads)
+                                // should trigger BinaryData.
                             }
                             else
                             {

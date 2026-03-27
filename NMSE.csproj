@@ -18,7 +18,7 @@
 		     The net10.0-windows TFM already ensures Windows-only, but some analyzer
 		     configurations still emit false positives for WinForms API calls.
 		     IL2026/IL2104/IL3050 are AOT/trimmer warnings from WinForms internals that
-		     are safe to suppress — Microsoft's WinForms SDK handles these at publish. -->
+		     are safe to suppress (Microsoft's WinForms SDK handles these at publish). -->
 		<NoWarn>$(NoWarn);CA1416;IL2026;IL2104;IL3050</NoWarn>
 
 		<!-- Native AOT compilation: produces a fully native executable with no .NET
@@ -61,7 +61,7 @@
 		     Remove it from the SDK glob so the target is the sole source,
 		     preventing CS2002 duplicate-source warnings on incremental builds.
 		     See also the <Compile Include> inside GenerateBuildInfo that adds
-		     it back dynamically — both halves are required for correctness. -->
+		     it back dynamically (requires both halves for correctness). -->
 		<Compile Remove="BuildInfo.g.cs" />
 	</ItemGroup>
 
@@ -122,7 +122,7 @@
 
 	     NOTE: BeforeTargets="CoreCompile" + the explicit <Compile>
 	     Include are both required.  The SDK's implicit **/*.cs glob
-	     is evaluated at project load — before any targets run — so
+	     is evaluated at project load and before any targets run, so
 	     BuildInfo.g.cs (which is git-ignored and absent on a fresh
 	     checkout / CI clone) is never matched by the glob.  We must
 	     add it to the Compile items dynamically inside the target.
@@ -177,7 +177,7 @@
 	<!-- Zip the publish output for release builds (dotnet publish -c Release).
 	     The publish directory contains the Native AOT compiled, trimmed,
 	     self-contained executable and its runtime dependencies.
-	     Intentionally overwrites the build zip — the AOT binary is the release artifact. -->
+	     Intentionally overwrites the local testing build zip as the AOT binary is the release artifact. -->
 	<Target Name="ZipPublishOutput" AfterTargets="Publish" Condition="'$(Configuration)' == 'Release'">
 		<ZipDirectory SourceDirectory="$(PublishDir)" DestinationFile="$(MSBuildProjectDirectory)/Build/bin/NMSE-$(NmseVersion)-$(Configuration).zip" Overwrite="true" />
 	</Target>

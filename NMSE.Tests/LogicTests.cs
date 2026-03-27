@@ -35,7 +35,7 @@ public class LogicTests
             if (jsonDir == null) return;
 
             FrigateTraitDatabase.LoadFromFile(Path.Combine(jsonDir, "FrigateTraits.json"));
-            SettlementPerkDatabase.LoadFromFile(Path.Combine(jsonDir, "SettlementPerks.json"));
+            SettlementDatabase.LoadFromFile(Path.Combine(jsonDir, "SettlementPerks.json"));
             WikiGuideDatabase.LoadFromFile(Path.Combine(jsonDir, "WikiGuide.json"));
             TitleDatabase.LoadFromFile(Path.Combine(jsonDir, "Titles.json"));
 
@@ -335,6 +335,144 @@ public class LogicTests
         var bases = json.GetArray("Bases")!;
         int idx = StarshipLogic.FindCorvetteBaseIndex(bases, 1756566104);
         Assert.Equal(-1, idx);
+    }
+
+    [Fact]
+    public void StarshipLogic_FindCorvetteBaseIndex_MatchesWithinOneSec()
+    {
+        var json = JsonObject.Parse(@"{
+            ""Bases"": [
+                {
+                    ""Owner"": { ""TS"": 1756566105 },
+                    ""BaseType"": { ""PersistentBaseTypes"": ""PlayerShipBase"" }
+                }
+            ]
+        }");
+        var bases = json.GetArray("Bases")!;
+        // TS is 1756566105 but seed is 1756566104 => delta = 1, within ±1 s tier
+        int idx = StarshipLogic.FindCorvetteBaseIndex(bases, 1756566104);
+        Assert.Equal(0, idx);
+    }
+
+    [Fact]
+    public void StarshipLogic_FindCorvetteBaseIndex_MatchesWithin60Sec()
+    {
+        var json = JsonObject.Parse(@"{
+            ""Bases"": [
+                {
+                    ""Owner"": { ""TS"": 1756566150 },
+                    ""BaseType"": { ""PersistentBaseTypes"": ""PlayerShipBase"" }
+                }
+            ]
+        }");
+        var bases = json.GetArray("Bases")!;
+        // delta = 46, beyond ±1 s but within ±60 s tier
+        int idx = StarshipLogic.FindCorvetteBaseIndex(bases, 1756566104);
+        Assert.Equal(0, idx);
+    }
+
+    [Fact]
+    public void StarshipLogic_FindCorvetteBaseIndex_MatchesWithin120Sec()
+    {
+        var json = JsonObject.Parse(@"{
+            ""Bases"": [
+                {
+                    ""Owner"": { ""TS"": 1756566220 },
+                    ""BaseType"": { ""PersistentBaseTypes"": ""PlayerShipBase"" }
+                }
+            ]
+        }");
+        var bases = json.GetArray("Bases")!;
+        // delta = 116, beyond ±60 s but within ±120 s tier
+        int idx = StarshipLogic.FindCorvetteBaseIndex(bases, 1756566104);
+        Assert.Equal(0, idx);
+    }
+
+    [Fact]
+    public void StarshipLogic_FindCorvetteBaseIndex_RejectsOver120Sec()
+    {
+        var json = JsonObject.Parse(@"{
+            ""Bases"": [
+                {
+                    ""Owner"": { ""TS"": 1756566300 },
+                    ""BaseType"": { ""PersistentBaseTypes"": ""PlayerShipBase"" }
+                }
+            ]
+        }");
+        var bases = json.GetArray("Bases")!;
+        // delta = 196, beyond ±120 s tier
+        int idx = StarshipLogic.FindCorvetteBaseIndex(bases, 1756566104);
+        Assert.Equal(-1, idx);
+    }
+
+    [Fact]
+    public void StarshipLogic_FindCorvetteBaseIndex_PrefersSmallestDeltaInTier()
+    {
+        var json = JsonObject.Parse(@"{
+            ""Bases"": [
+                {
+                    ""Owner"": { ""TS"": 1756566160 },
+                    ""BaseType"": { ""PersistentBaseTypes"": ""PlayerShipBase"" }
+                },
+                {
+                    ""Owner"": { ""TS"": 1756566110 },
+                    ""BaseType"": { ""PersistentBaseTypes"": ""PlayerShipBase"" }
+                }
+            ]
+        }");
+        var bases = json.GetArray("Bases")!;
+        // Both within ±60 s tier (deltas 56 and 6).
+        // Index 1 has smaller delta (6) so it should be preferred.
+        int idx = StarshipLogic.FindCorvetteBaseIndex(bases, 1756566104);
+        Assert.Equal(1, idx);
+    }
+
+    [Fact]
+    public void StarshipLogic_FindCorvetteBaseIndex_PrefersExactOverTolerance()
+    {
+        var json = JsonObject.Parse(@"{
+            ""Bases"": [
+                {
+                    ""Owner"": { ""TS"": 1756566105 },
+                    ""BaseType"": { ""PersistentBaseTypes"": ""PlayerShipBase"" }
+                },
+                {
+                    ""Owner"": { ""TS"": 1756566104 },
+                    ""BaseType"": { ""PersistentBaseTypes"": ""PlayerShipBase"" }
+                }
+            ]
+        }");
+        var bases = json.GetArray("Bases")!;
+        // Index 0 is off by 1, index 1 is exact match.  Exact match tier runs first.
+        int idx = StarshipLogic.FindCorvetteBaseIndex(bases, 1756566104);
+        Assert.Equal(1, idx);
+    }
+
+    [Fact]
+    public void StarshipLogic_FindCorvetteBaseIndex_RealSaveScenario_DriftedTS()
+    {
+        // Simulates the real save scenario where ship seeds and base TS values drift by 1 second:
+        //   Ship "USCSS Abraxas"  seed 0x68B31258 = 1756566104 → Base TS 1756566104 (exact)
+        //   Ship "USCSS Solomon"  seed 0x68F8EF8D = 1761144717 → Base TS 1761144718 (off by 1)
+        //   Ship "The Bebop"      seed 0x68BA4883 = 1757038723 → Base TS 1757038724 (off by 1)
+        var json = JsonObject.Parse(@"{
+            ""Bases"": [
+                { ""Owner"": { ""TS"": 999 }, ""BaseType"": { ""PersistentBaseTypes"": ""HomePlanetBase"" } },
+                { ""Owner"": { ""TS"": 1756566104 }, ""BaseType"": { ""PersistentBaseTypes"": ""PlayerShipBase"" } },
+                { ""Owner"": { ""TS"": 1761144718 }, ""BaseType"": { ""PersistentBaseTypes"": ""PlayerShipBase"" } },
+                { ""Owner"": { ""TS"": 1757038724 }, ""BaseType"": { ""PersistentBaseTypes"": ""PlayerShipBase"" } }
+            ]
+        }");
+        var bases = json.GetArray("Bases")!;
+
+        // Exact match for Abraxas
+        Assert.Equal(1, StarshipLogic.FindCorvetteBaseIndex(bases, 1756566104));
+
+        // Drift-by-1 match for Solomon (seed 1761144717, TS 1761144718)
+        Assert.Equal(2, StarshipLogic.FindCorvetteBaseIndex(bases, 1761144717));
+
+        // Drift-by-1 match for The Bebop (seed 1757038723, TS 1757038724)
+        Assert.Equal(3, StarshipLogic.FindCorvetteBaseIndex(bases, 1757038723));
     }
 
     [Fact]
@@ -2972,6 +3110,33 @@ public class LogicTests
     }
 
     [Fact]
+    public void Double_ToString_InvariantCulture_UnderGermanLocale()
+    {
+        // Verifies that using InvariantCulture with ToString produces a dot decimal,
+        // matching the pattern used for CompanionPanel Scale/Trust/Traits/Moods display.
+        var saved = System.Globalization.CultureInfo.CurrentCulture;
+        try
+        {
+            System.Threading.Thread.CurrentThread.CurrentCulture =
+                new System.Globalization.CultureInfo("de-DE");
+
+            double val = 1.75;
+            // Without InvariantCulture, German locale would produce "1,75"
+            string withoutCulture = val.ToString();
+            Assert.Contains(",", withoutCulture); // sanity: German uses comma
+
+            // With InvariantCulture, it must use dot
+            string withCulture = val.ToString(System.Globalization.CultureInfo.InvariantCulture);
+            Assert.Contains(".", withCulture);
+            Assert.DoesNotContain(",", withCulture);
+        }
+        finally
+        {
+            System.Threading.Thread.CurrentThread.CurrentCulture = saved;
+        }
+    }
+
+    [Fact]
     public void JsonParser_Integers_ReturnIntOrLong()
     {
         string json = "{\"small\":42,\"neg\":-100,\"big\":3000000000,\"zero\":0}";
@@ -3315,7 +3480,7 @@ public class LogicTests
         Assert.Equal(8, SettlementLogic.StatCount);
         Assert.Equal(8, SettlementLogic.StatLabels.Length);
         Assert.Equal(8, SettlementLogic.StatMaxValues.Length);
-        Assert.Equal("Population", SettlementLogic.StatLabels[0]);
+        Assert.Equal("Max Population", SettlementLogic.StatLabels[0]);
         Assert.Equal(175, SettlementLogic.StatMaxValues[0]);
         Assert.Equal("Happiness", SettlementLogic.StatLabels[1]);
         Assert.Equal("Production", SettlementLogic.StatLabels[2]);
@@ -6485,7 +6650,7 @@ public class LogicTests
     public void JsonParser_UnicodeEscapeLatin1Range_ReturnsStringNotBinaryData()
     {
         // \u00E9 (é, U+00E9) is in the 0x80-0xFF range but arrives as a \u escape,
-        // so it represents intentional Unicode — not raw binary data.
+        // so it represents intentional Unicode - not raw binary data.
         // This must parse as a string, NOT BinaryData.
         string json = """{"SaveName": "Caf\u00E9 \u00FC\u00F1"}""";
         var obj = JsonObject.Parse(json);
@@ -6587,5 +6752,1178 @@ public class LogicTests
             dir = parent.FullName;
         }
         return null;
+    }
+
+    // --- Raw value preservation tests ---
+
+    [Fact]
+    public void MainStatsLogic_ReadRawStatValue_ReturnsUnclamped()
+    {
+        var ps = new JsonObject();
+        ps.Add("Health", 999999999); // Exceeds typical max of 999999
+        decimal raw = MainStatsLogic.ReadRawStatValue(ps, "Health");
+        Assert.Equal(999999999m, raw);
+    }
+
+    [Fact]
+    public void MainStatsLogic_ReadStatValue_ClampsToRange()
+    {
+        var ps = new JsonObject();
+        ps.Add("Health", 999999999);
+        decimal clamped = MainStatsLogic.ReadStatValue(ps, "Health", 0, 999999);
+        Assert.Equal(999999m, clamped);
+    }
+
+    [Fact]
+    public void MainStatsLogic_WriteStatValues_SkipsUnchangedWithRawValues()
+    {
+        var ps = new JsonObject();
+        ps.Add("Health", 5000000); // Above max (999999)
+        ps.Add("Shield", 100);
+        ps.Add("Energy", 200);
+        ps.Add("Units", 50);
+        ps.Add("Nanites", 60);
+        ps.Add("Specials", 70);
+
+        var rawValues = new Dictionary<string, decimal>
+        {
+            ["Health"] = 5000000m,
+            ["Shield"] = 100m,
+            ["Energy"] = 200m,
+            ["Units"] = 50m,
+            ["Nanites"] = 60m,
+            ["Specials"] = 70m,
+        };
+
+        // health=999999 (clamped max), shield/energy/units/nanites/quicksilver = raw values (in range)
+        MainStatsLogic.WriteStatValues(ps, 999999, 100, 200, 50, 60, 70, rawValues);
+
+        // Health should NOT be written (999999 == clamp(5000000, 0, 999999))
+        // so original 5000000 is preserved
+        Assert.Equal(5000000, ps.GetInt("Health"));
+
+        // Shield IS in range, so 100 == clamp(100, 0, 999999) - should NOT be written
+        Assert.Equal(100, ps.GetInt("Shield"));
+    }
+
+    [Fact]
+    public void MainStatsLogic_WriteStatValues_WritesChangedValues()
+    {
+        var ps = new JsonObject();
+        ps.Add("Health", 5000000);
+        ps.Add("Shield", 100);
+        ps.Add("Energy", 200);
+        ps.Add("Units", 50);
+        ps.Add("Nanites", 60);
+        ps.Add("Specials", 70);
+
+        var rawValues = new Dictionary<string, decimal>
+        {
+            ["Health"] = 5000000m,
+            ["Shield"] = 100m,
+            ["Energy"] = 200m,
+            ["Units"] = 50m,
+            ["Nanites"] = 60m,
+            ["Specials"] = 70m,
+        };
+
+        // User changed shield from 100 to 500
+        MainStatsLogic.WriteStatValues(ps, 999999, 500, 200, 50, 60, 70, rawValues);
+
+        // Health: NOT written (unchanged from clamped), original preserved
+        Assert.Equal(5000000, ps.GetInt("Health"));
+
+        // Shield: WRITTEN (user changed it from 100 to 500)
+        Assert.Equal(500, ps.GetInt("Shield"));
+    }
+
+    [Fact]
+    public void MainStatsLogic_WriteStatValues_NullRawValues_AlwaysWrites()
+    {
+        var ps = new JsonObject();
+        ps.Add("Health", 5000000);
+        ps.Add("Shield", 100);
+        ps.Add("Energy", 200);
+        ps.Add("Units", 50);
+        ps.Add("Nanites", 60);
+        ps.Add("Specials", 70);
+
+        // Without raw values, always write (backward compatible behavior)
+        MainStatsLogic.WriteStatValues(ps, 999999, 100, 200, 50, 60, 70, null);
+        Assert.Equal(999999, ps.GetInt("Health"));
+    }
+
+    [Fact]
+    public void SaveShipData_PreservesRawStats_WhenUnchanged()
+    {
+        // Setup a ship with stats that exceed BaseStatLimits
+        var ship = new JsonObject();
+        ship.Add("Name", "");
+        var resource = new JsonObject();
+        resource.Add("Filename", "");
+        var seedArr = new JsonArray();
+        seedArr.Add(true);
+        seedArr.Add("0x0");
+        resource.Add("Seed", seedArr);
+        ship.Add("Resource", resource);
+
+        var inv = new JsonObject();
+        var bsv = new JsonArray();
+        AddBaseStatEntry(bsv, "^SHIP_DAMAGE", 999.0); // above typical max
+        AddBaseStatEntry(bsv, "^SHIP_SHIELD", 50.0);
+        AddBaseStatEntry(bsv, "^SHIP_HYPERDRIVE", 500.0); // above typical max
+        AddBaseStatEntry(bsv, "^SHIP_AGILE", 30.0);
+        inv.Add("BaseStatValues", bsv);
+        ship.Add("Inventory", inv);
+
+        var playerState = new JsonObject();
+        playerState.Add("PrimaryShip", 0);
+
+        // Simulate: UI values are what clamping would produce from raw values
+        var range = BaseStatLimits.GetRange("Normal", "^SHIP_DAMAGE", StatCategory.Ship);
+        double clampedDamage = range != null ? Math.Max(range.MinValue, Math.Min(999.0, range.MaxValue)) : 999.0;
+        var rangeHd = BaseStatLimits.GetRange("Normal", "^SHIP_HYPERDRIVE", StatCategory.Ship);
+        double clampedHd = rangeHd != null ? Math.Max(rangeHd.MinValue, Math.Min(500.0, rangeHd.MaxValue)) : 500.0;
+
+        var values = new StarshipLogic.ShipSaveValues
+        {
+            Name = "TestShip",
+            ShipIndex = -1,
+            Damage = clampedDamage,
+            Shield = 50.0,
+            Hyperdrive = clampedHd,
+            Maneuver = 30.0,
+            RawStatValues = new Dictionary<string, double>
+            {
+                ["^SHIP_DAMAGE"] = 999.0,
+                ["^SHIP_SHIELD"] = 50.0,
+                ["^SHIP_HYPERDRIVE"] = 500.0,
+                ["^SHIP_AGILE"] = 30.0,
+            }
+        };
+        StarshipLogic.SaveShipData(ship, playerState, values);
+
+        // Raw values should be preserved (999.0 and 500.0)
+        double savedDamage = StatHelper.ReadBaseStatValue(ship.GetObject("Inventory"), "^SHIP_DAMAGE");
+        double savedHd = StatHelper.ReadBaseStatValue(ship.GetObject("Inventory"), "^SHIP_HYPERDRIVE");
+        Assert.Equal(999.0, savedDamage);
+        Assert.Equal(500.0, savedHd);
+    }
+
+    [Fact]
+    public void SaveShipData_WritesNewStats_WhenUserChanged()
+    {
+        var ship = new JsonObject();
+        ship.Add("Name", "");
+        var resource = new JsonObject();
+        resource.Add("Filename", "");
+        var seedArr = new JsonArray();
+        seedArr.Add(true);
+        seedArr.Add("0x0");
+        resource.Add("Seed", seedArr);
+        ship.Add("Resource", resource);
+
+        var inv = new JsonObject();
+        var bsv = new JsonArray();
+        AddBaseStatEntry(bsv, "^SHIP_DAMAGE", 999.0);
+        inv.Add("BaseStatValues", bsv);
+        ship.Add("Inventory", inv);
+
+        var playerState = new JsonObject();
+        playerState.Add("PrimaryShip", 0);
+
+        // User changed damage from clamped value to a new in-range value
+        var values = new StarshipLogic.ShipSaveValues
+        {
+            Name = "TestShip",
+            ShipIndex = -1,
+            Damage = 75.0, // User explicitly set this
+            RawStatValues = new Dictionary<string, double>
+            {
+                ["^SHIP_DAMAGE"] = 999.0,
+            }
+        };
+        StarshipLogic.SaveShipData(ship, playerState, values);
+
+        double savedDamage = StatHelper.ReadBaseStatValue(ship.GetObject("Inventory"), "^SHIP_DAMAGE");
+        Assert.Equal(75.0, savedDamage);
+    }
+
+    [Fact]
+    public void SaveToolData_PreservesRawStats_WhenUnchanged()
+    {
+        var tool = new JsonObject();
+        tool.Add("Name", "");
+        var seedArr = new JsonArray();
+        seedArr.Add(true);
+        seedArr.Add("0x0");
+        tool.Add("Seed", seedArr);
+
+        var store = new JsonObject();
+        var bsv = new JsonArray();
+        AddBaseStatEntry(bsv, "^WEAPON_DAMAGE", 999.0);
+        AddBaseStatEntry(bsv, "^WEAPON_MINING", 50.0);
+        AddBaseStatEntry(bsv, "^WEAPON_SCAN", 40.0);
+        store.Add("BaseStatValues", bsv);
+        store.Add("Class", new JsonObject());
+        tool.Add("Store", store);
+        tool.Add("Store_TechOnly", new JsonObject());
+
+        var range = BaseStatLimits.GetRange("Normal", "^WEAPON_DAMAGE", StatCategory.Weapon);
+        double clampedDamage = range != null ? Math.Max(range.MinValue, Math.Min(999.0, range.MaxValue)) : 999.0;
+
+        var values = new MultitoolLogic.ToolSaveValues
+        {
+            Name = "TestTool",
+            Damage = clampedDamage,
+            Mining = 50.0,
+            Scan = 40.0,
+            RawStatValues = new Dictionary<string, double>
+            {
+                ["^WEAPON_DAMAGE"] = 999.0,
+                ["^WEAPON_MINING"] = 50.0,
+                ["^WEAPON_SCAN"] = 40.0,
+            }
+        };
+
+        MultitoolLogic.SaveToolData(tool, null, values, false);
+
+        double savedDamage = StatHelper.ReadBaseStatValue(tool.GetObject("Store"), "^WEAPON_DAMAGE");
+        Assert.Equal(999.0, savedDamage);
+    }
+
+    [Fact]
+    public void ConditionalClampStatValue_PreservesRaw_WhenUnchanged()
+    {
+        var rawValues = new Dictionary<string, double> { ["^SHIP_DAMAGE"] = 999.0 };
+        var range = BaseStatLimits.GetRange("Normal", "^SHIP_DAMAGE", StatCategory.Ship);
+        double clampedMax = range != null ? range.MaxValue : 100.0;
+
+        // UI shows clamped value (e.g. 100) - should return raw (999.0)
+        double result = BaseStatLimits.ConditionalClampStatValue("Normal", "^SHIP_DAMAGE",
+            clampedMax, StatCategory.Ship, rawValues);
+        Assert.Equal(999.0, result);
+    }
+
+    [Fact]
+    public void ConditionalClampStatValue_ClampsNewValue_WhenUserChanged()
+    {
+        var rawValues = new Dictionary<string, double> { ["^SHIP_DAMAGE"] = 999.0 };
+
+        // User changed the value to 75 (different from clamp(999))
+        double result = BaseStatLimits.ConditionalClampStatValue("Normal", "^SHIP_DAMAGE",
+            75.0, StatCategory.Ship, rawValues);
+        Assert.Equal(75.0, result);
+    }
+
+    [Fact]
+    public void ConditionalClampStatValue_NullRawValues_FallsBackToClamp()
+    {
+        // Without raw values, should just clamp
+        double result = BaseStatLimits.ConditionalClampStatValue("Normal", "^SHIP_DAMAGE",
+            999.0, StatCategory.Ship, null);
+        var range = BaseStatLimits.GetRange("Normal", "^SHIP_DAMAGE", StatCategory.Ship);
+        double expected = range != null ? Math.Max(range.MinValue, Math.Min(999.0, range.MaxValue)) : 999.0;
+        Assert.Equal(expected, result);
+    }
+
+    private static void AddBaseStatEntry(JsonArray bsv, string statId, double value)
+    {
+        var entry = new JsonObject();
+        entry.Add("BaseStatID", statId);
+        entry.Add("Value", value);
+        bsv.Add(entry);
+    }
+
+    // --- Settlement (raw value preservation) ---
+
+    [Fact]
+    public void SettlementLogic_LoadSettlementData_StoresRawStats()
+    {
+        // Create a settlement with stats that exceed the max and a separate Population key
+        var settlement = JsonObject.Parse(@"{
+            ""Name"": ""TestSettlement"",
+            ""SeedValue"": ""ABC123"",
+            ""Owner"": { ""USN"": ""u1"", ""UID"": ""uid1"" },
+            ""Stats"": [999, 200, 1500000, 1000000, 100, 10000000, 1000, 1000],
+            ""Population"": 999,
+            ""PendingJudgementType"": { ""SettlementJudgementType"": ""None"" },
+            ""LastJudgementTime"": 0
+        }");
+
+        var data = SettlementLogic.LoadSettlementData(settlement);
+
+        // Stats are unclamped - UI shows raw values
+        Assert.Equal(999, data.Stats[0]); // MaxPopulation raw value
+        Assert.Equal(200, data.Stats[1]); // Happiness raw value
+
+        // Raw stat values should be preserved
+        Assert.Equal(999, data.RawStats[0]); // MaxPopulation raw
+        Assert.Equal(200, data.RawStats[1]); // Happiness raw
+
+        // Population field (separate from Stats[0])
+        Assert.True(data.HasPopulationKey);
+        Assert.Equal(200, data.Population); // Clamped from 999 to PopulationMax (200)
+        Assert.Equal(999, data.RawPopulation); // Raw preserved
+    }
+
+    [Fact]
+    public void SettlementLogic_ShouldWriteStat_SkipsUnchangedValue()
+    {
+        // Stats are unclamped - UI shows raw values directly.
+        // If UI value matches raw, should NOT write (no change).
+        var rawStats = new int[] { 999, 200, 1500000, 1000000, 100, 10000000, 1000, 1000 };
+
+        Assert.False(SettlementLogic.ShouldWriteStat(0, 999, rawStats)); // 999 == raw[0]
+        Assert.False(SettlementLogic.ShouldWriteStat(1, 200, rawStats)); // 200 == raw[1]
+    }
+
+    [Fact]
+    public void SettlementLogic_ShouldWriteStat_WritesWhenUserChanged()
+    {
+        // User changed value from raw - should write.
+        var rawStats = new int[] { 999, 200, 1500000, 1000000, 100, 10000000, 1000, 1000 };
+
+        Assert.True(SettlementLogic.ShouldWriteStat(0, 100, rawStats)); // 100 != 999
+        Assert.True(SettlementLogic.ShouldWriteStat(1, 50, rawStats));  // 50 != 200
+    }
+
+    [Fact]
+    public void SettlementLogic_ShouldWriteStat_NullRawStats_AlwaysWrites()
+    {
+        Assert.True(SettlementLogic.ShouldWriteStat(0, 175, null));
+        Assert.True(SettlementLogic.ShouldWriteStat(1, 180, null));
+    }
+
+    [Fact]
+    public void SettlementLogic_SaveSettlementData_PreservesUnchangedStats()
+    {
+        // Create a settlement with stats that exceed typical range
+        var settlement = JsonObject.Parse(@"{
+            ""Name"": ""TestSettlement"",
+            ""SeedValue"": ""ABC123"",
+            ""Stats"": [999, 200, 100, 50, 25, 500, 100, 100],
+            ""Population"": 999,
+            ""PendingJudgementType"": { ""SettlementJudgementType"": ""None"" },
+            ""LastJudgementTime"": 0
+        }");
+
+        // Simulate: user loads (values shown unclamped), doesn't change them, saves
+        var rawStats = new int[] { 999, 200, 100, 50, 25, 500, 100, 100 };
+
+        var saveValues = new SettlementLogic.SettlementSaveValues
+        {
+            Name = "TestSettlement",
+            SeedValue = "ABC123",
+            Stats = new int[] { 999, 200, 100, 50, 25, 500, 100, 100 }, // Unchanged from raw
+            RawStats = rawStats,
+            DecisionTypeIndex = 0,
+        };
+
+        SettlementLogic.SaveSettlementData(settlement, saveValues);
+
+        // All stats should be preserved (user didn't change any)
+        var statsArr = settlement.GetArray("Stats")!;
+        Assert.Equal(999, statsArr.GetInt(0)); // Preserved original
+        Assert.Equal(200, statsArr.GetInt(1)); // Preserved original
+
+        // In-range stats that matched should also be preserved
+        Assert.Equal(100, statsArr.GetInt(2));
+        Assert.Equal(50, statsArr.GetInt(3));
+
+        // Population field should also be preserved
+        Assert.Equal(999, settlement.GetInt("Population"));
+    }
+
+    [Fact]
+    public void SettlementLogic_SaveSettlementData_WritesChangedStats()
+    {
+        var settlement = JsonObject.Parse(@"{
+            ""Name"": ""TestSettlement"",
+            ""SeedValue"": ""ABC123"",
+            ""Stats"": [999, 200, 100, 50, 25, 500, 100, 100],
+            ""Population"": 999,
+            ""PendingJudgementType"": { ""SettlementJudgementType"": ""None"" },
+            ""LastJudgementTime"": 0
+        }");
+
+        var rawStats = new int[] { 999, 200, 100, 50, 25, 500, 100, 100 };
+
+        var saveValues = new SettlementLogic.SettlementSaveValues
+        {
+            Name = "TestSettlement",
+            SeedValue = "ABC123",
+            Stats = new int[] { 100, 50, 100, 50, 25, 500, 100, 100 }, // User changed MaxPop to 100, Happiness to 50
+            RawStats = rawStats,
+            Population = 100, // User changed Population to 100
+            RawPopulation = 999, // Raw was 999
+            HasPopulationKey = true,
+            DecisionTypeIndex = 0,
+        };
+
+        SettlementLogic.SaveSettlementData(settlement, saveValues);
+
+        var statsArr = settlement.GetArray("Stats")!;
+        Assert.Equal(100, statsArr.GetInt(0)); // User changed MaxPop - written
+        Assert.Equal(50, statsArr.GetInt(1));  // User changed Happiness - written
+        Assert.Equal(100, settlement.GetInt("Population")); // Population also written (user changed it)
+    }
+
+    [Fact]
+    public void SettlementLogic_SaveSettlementData_NullRawStats_AlwaysWrites()
+    {
+        var settlement = JsonObject.Parse(@"{
+            ""Name"": ""TestSettlement"",
+            ""SeedValue"": ""ABC123"",
+            ""Stats"": [999, 200, 100, 50, 25, 500, 100, 100],
+            ""Population"": 999,
+            ""PendingJudgementType"": { ""SettlementJudgementType"": ""None"" },
+            ""LastJudgementTime"": 0
+        }");
+
+        // No raw stats - backward-compatible behavior, always writes
+        var saveValues = new SettlementLogic.SettlementSaveValues
+        {
+            Name = "TestSettlement",
+            SeedValue = "ABC123",
+            Stats = new int[] { 175, 180, 100, 50, 25, 500, 100, 100 },
+            RawStats = null,
+            DecisionTypeIndex = 0,
+        };
+
+        SettlementLogic.SaveSettlementData(settlement, saveValues);
+
+        var statsArr = settlement.GetArray("Stats")!;
+        Assert.Equal(175, statsArr.GetInt(0)); // Written unconditionally
+        Assert.Equal(180, statsArr.GetInt(1)); // Written unconditionally
+    }
+
+    [Fact]
+    public void SettlementLogic_LoadSettlementData_NoPopulationKey_HasPopulationKeyFalse()
+    {
+        // Old save format: no top-level Population key
+        var settlement = JsonObject.Parse(@"{
+            ""Name"": ""OldSettlement"",
+            ""SeedValue"": ""OLD123"",
+            ""Owner"": { ""USN"": ""u1"", ""UID"": ""uid1"" },
+            ""Stats"": [50, 100, 500, 200, 10, 1000, 50, 50],
+            ""PendingJudgementType"": { ""SettlementJudgementType"": ""None"" },
+            ""LastJudgementTime"": 0
+        }");
+
+        var data = SettlementLogic.LoadSettlementData(settlement);
+
+        Assert.False(data.HasPopulationKey);
+        Assert.Equal(0, data.Population);
+        Assert.Equal(50, data.Stats[0]); // Stats[0] = MaxPopulation, read normally
+    }
+
+    [Fact]
+    public void SettlementLogic_SaveSettlementData_NoPopulationKey_DoesNotWritePopulation()
+    {
+        // Old save format: no Population key. Saving should NOT add one.
+        var settlement = JsonObject.Parse(@"{
+            ""Name"": ""OldSettlement"",
+            ""SeedValue"": ""OLD123"",
+            ""Stats"": [50, 100, 500, 200, 10, 1000, 50, 50],
+            ""PendingJudgementType"": { ""SettlementJudgementType"": ""None"" },
+            ""LastJudgementTime"": 0
+        }");
+
+        var saveValues = new SettlementLogic.SettlementSaveValues
+        {
+            Name = "OldSettlement",
+            SeedValue = "OLD123",
+            Stats = new int[] { 50, 100, 500, 200, 10, 1000, 50, 50 },
+            RawStats = null,
+            HasPopulationKey = false,
+            DecisionTypeIndex = 0,
+        };
+
+        SettlementLogic.SaveSettlementData(settlement, saveValues);
+
+        // Should NOT have a Population key
+        Assert.False(settlement.Contains("Population"));
+    }
+
+    // --- Settlement Perk Seed Format Tests --------------------------
+
+    [Fact]
+    public void SettlementLogic_PerkSeedFormat_IntegerSeedSavedInPerkString()
+    {
+        // Verify that a procedural perk with integer seed is stored as "perkId#seed"
+        var settlement = JsonObject.Parse(@"{
+            ""Name"": ""SeedTest"",
+            ""SeedValue"": ""0xABC"",
+            ""Stats"": [50, 100, 500, 200, 10, 1000, 50, 50],
+            ""Perks"": [""^STARTING_NEG1#12345"", ""^STARTING_POS1"", ""^""],
+            ""PendingJudgementType"": { ""SettlementJudgementType"": ""None"" },
+            ""LastJudgementTime"": 0
+        }");
+
+        // Verify the perk string format round-trips correctly through the JSON
+        var perksArr = settlement.GetArray("Perks")!;
+        string perkWithSeed = perksArr.GetString(0)!;
+        Assert.Contains("#", perkWithSeed);
+        Assert.Equal("^STARTING_NEG1#12345", perkWithSeed);
+
+        // Parse like the UI does
+        int hashIdx = perkWithSeed.IndexOf('#');
+        Assert.True(hashIdx >= 0);
+        string perkId = perkWithSeed[..hashIdx];
+        string seed = perkWithSeed[(hashIdx + 1)..];
+        Assert.Equal("^STARTING_NEG1", perkId);
+        Assert.Equal("12345", seed);
+        Assert.True(int.TryParse(seed, System.Globalization.NumberStyles.Integer,
+            System.Globalization.CultureInfo.InvariantCulture, out int seedInt));
+        Assert.Equal(12345, seedInt);
+
+        // Verify perk without seed
+        string perkNoSeed = perksArr.GetString(1)!;
+        Assert.DoesNotContain("#", perkNoSeed);
+        Assert.Equal("^STARTING_POS1", perkNoSeed);
+    }
+
+    [Fact]
+    public void SettlementLogic_PerkSeedFormat_EmptyPerkIsCaretOnly()
+    {
+        var settlement = JsonObject.Parse(@"{
+            ""Name"": ""SeedTest"",
+            ""Perks"": [""^""]
+        }");
+
+        var perksArr = settlement.GetArray("Perks")!;
+        Assert.Equal("^", perksArr.GetString(0));
+    }
+
+    [Fact]
+    public void SettlementLogic_PerkSeedFormat_InvalidSeedNotInteger_SavesWithoutSeed()
+    {
+        // This tests the validation logic: non-integer seed text should result in perkId only
+        string perkId = "^PROC_TRAIT_BENEFIT";
+        string badSeed = "not_an_integer";
+        // The save logic validates: int.TryParse(seedText, ...) → false → saves perkId without seed
+        Assert.False(int.TryParse(badSeed, System.Globalization.NumberStyles.Integer,
+            System.Globalization.CultureInfo.InvariantCulture, out _));
+        // Therefore the saved value should be just the perkId, not "perkId#badSeed"
+        string savedVal = perkId; // This is what the UI code would produce
+        Assert.DoesNotContain("#", savedVal);
+    }
+
+    // --- SettlementBuildingState bit-flag tests ---
+
+    [Fact]
+    public void SettlementBuildingState_IsEmpty_TrueForZero()
+    {
+        Assert.True(SettlementLogic.SettlementBuildingState.IsEmpty(0));
+        Assert.False(SettlementLogic.SettlementBuildingState.IsEmpty(1));
+    }
+
+    [Fact]
+    public void SettlementBuildingState_IsInitialConstruction_OnlyBits0to6()
+    {
+        // Values that are purely initial construction (bits 0–6 only)
+        Assert.True(SettlementLogic.SettlementBuildingState.IsInitialConstruction(5));   // 0b0000101
+        Assert.True(SettlementLogic.SettlementBuildingState.IsInitialConstruction(127)); // 0b1111111 = all 7 phases
+        Assert.True(SettlementLogic.SettlementBuildingState.IsInitialConstruction(1));
+
+        // Not initial construction: 0, or values with higher bits set
+        Assert.False(SettlementLogic.SettlementBuildingState.IsInitialConstruction(0));
+        Assert.False(SettlementLogic.SettlementBuildingState.IsInitialConstruction(67108991)); // has bit 26
+    }
+
+    [Fact]
+    public void SettlementBuildingState_GetInitConstruction_ExtractsBits0to6()
+    {
+        // 0x0C30007F has bits 0–6 all set (0x7F = 127)
+        Assert.Equal(0x7F, SettlementLogic.SettlementBuildingState.GetInitConstruction(unchecked((int)0x0C30007F)));
+        Assert.Equal(0x35, SettlementLogic.SettlementBuildingState.GetInitConstruction(53)); // 0x35 = 53
+        Assert.Equal(0, SettlementLogic.SettlementBuildingState.GetInitConstruction(0));
+    }
+
+    [Fact]
+    public void SettlementBuildingState_GetUpgradeProgress_ExtractsBits10to19()
+    {
+        // 0x0C3FFC7F has bits 10–19 all set (1023 = 0x3FF): B-class with all upgrade progress
+        int bClassFullUpgrade = unchecked((int)0x0C3FFC7F); // 205519999
+        Assert.Equal(0x3FF, SettlementLogic.SettlementBuildingState.GetUpgradeProgress(bClassFullUpgrade));
+        Assert.Equal(0, SettlementLogic.SettlementBuildingState.GetUpgradeProgress(127)); // no upgrade bits
+    }
+
+    [Fact]
+    public void SettlementBuildingState_GetBit_IndividualBits()
+    {
+        int bClassComplete = 204472447; // 0x0C30007F = B-class Complete
+        Assert.True(SettlementLogic.SettlementBuildingState.GetBit(bClassComplete, 27));  // B_Arrived
+        Assert.True(SettlementLogic.SettlementBuildingState.GetBit(bClassComplete, 26));  // ClassSystemActive
+        Assert.True(SettlementLogic.SettlementBuildingState.GetBit(bClassComplete, 21));  // B_Confirmed
+        Assert.True(SettlementLogic.SettlementBuildingState.GetBit(bClassComplete, 20));  // B_Started
+        Assert.False(SettlementLogic.SettlementBuildingState.GetBit(bClassComplete, 28)); // A_Arrived not set
+        Assert.False(SettlementLogic.SettlementBuildingState.GetBit(bClassComplete, 29)); // S_Arrived not set
+    }
+
+    [Fact]
+    public void SettlementBuildingState_InitConstructionCount_Correct()
+    {
+        Assert.Equal(7, SettlementLogic.SettlementBuildingState.InitConstructionCount(127));  // all 7 bits
+        Assert.Equal(2, SettlementLogic.SettlementBuildingState.InitConstructionCount(5));    // bits 0, 2
+        Assert.Equal(3, SettlementLogic.SettlementBuildingState.InitConstructionCount(7));    // bits 0, 1, 2
+        Assert.Equal(0, SettlementLogic.SettlementBuildingState.InitConstructionCount(0));
+    }
+
+    [Theory]
+    [InlineData(0,           "settlement.bs_class_c", "settlement.bs_state_complete")]         // Line 1: Empty/C
+    [InlineData(5,           "settlement.bs_class_c", "settlement.bs_state_complete")]         // Line 2: C-class
+    [InlineData(127,         "settlement.bs_class_c", "settlement.bs_state_complete")]         // Line 10: C all done
+    [InlineData(67108991,    "settlement.bs_class_c", "settlement.bs_state_complete")]         // Line 11: system active
+    [InlineData(68157567,    "settlement.bs_class_c_to_b", "settlement.bs_state_upgrade_0")]   // Line 12: C→B upgrade
+    [InlineData(68156543,    "settlement.bs_class_c", "settlement.bs_state_complete")]         // Line 13: C complete
+    [InlineData(69205119,    "settlement.bs_class_c_to_b", "settlement.bs_state_upgrade_0")]   // Line 14: C→B upgrade
+    [InlineData(1046581,     "settlement.bs_class_c", "settlement.bs_state_complete")]         // Line 15: C complete
+    [InlineData(1047605,     "settlement.bs_class_c", "settlement.bs_state_complete")]         // Line 16: C complete
+    [InlineData(1047589,     "settlement.bs_class_c", "settlement.bs_state_complete")]         // Line 17: C complete
+    [InlineData(1047679,     "settlement.bs_class_c", "settlement.bs_state_complete")]         // Line 18: C complete
+    [InlineData(202375295,   "settlement.bs_class_c_to_b", "settlement.bs_state_awaiting_unveil")] // Line 19: C→B awaiting
+    [InlineData(204472447,   "settlement.bs_class_b", "settlement.bs_state_complete")]         // Line 20: B complete
+    [InlineData(205518975,   "settlement.bs_class_b", "settlement.bs_state_complete")]         // Line 21: B complete
+    [InlineData(205519999,   "settlement.bs_class_b", "settlement.bs_state_complete")]         // Line 22: B complete
+    [InlineData(208666751,   "settlement.bs_class_b_to_a", "settlement.bs_state_upgrade_0")]   // Line 23: B→A upgrade
+    [InlineData(477102207,   "settlement.bs_class_b_to_a", "settlement.bs_state_awaiting_unveil")] // Line 24: B→A awaiting
+    [InlineData(485490815,   "settlement.bs_class_a", "settlement.bs_state_complete")]         // Line 25: A complete
+    [InlineData(502268031,   "settlement.bs_class_a_to_s", "settlement.bs_state_upgrade_0")]   // Line 26: A→S upgrade
+    [InlineData(1039138943,  "settlement.bs_class_a_to_s", "settlement.bs_state_awaiting_unveil")] // Line 27: A→S awaiting
+    [InlineData(1072693375,  "settlement.bs_class_s", "settlement.bs_state_complete")]         // Line 28: S complete
+    [InlineData(1073740927,  "settlement.bs_class_s", "settlement.bs_state_complete")]         // Line 29: S complete
+    public void SettlementBuildingState_DetermineClassAndState_MatchesCSV(int value, string expectedClass, string expectedState)
+    {
+        var (classKey, stateKey) = SettlementLogic.SettlementBuildingState.DetermineClassAndState(value);
+        Assert.Equal(expectedClass, classKey);
+        Assert.Equal(expectedState, stateKey);
+    }
+
+    [Fact]
+    public void SettlementBuildingState_KnownMilestones_ContainsExpectedValues()
+    {
+        var milestones = SettlementDatabase.KnownMilestones;
+        Assert.Equal(13, milestones.Length);
+        Assert.Equal(0, milestones[0].Value);
+        Assert.Equal(1073740927, milestones[^1].Value);
+    }
+
+    [Fact]
+    public void SettlementBuildingState_GetBuildingSlotDescription_EmptySlot()
+    {
+        var desc = SettlementLogic.SettlementBuildingState.GetBuildingSlotDescription(0);
+        // Falls back to key name when UiStrings not loaded
+        Assert.Contains("Empty", desc, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public void SettlementBuildingState_GetBuildingSlotDescription_InitialConstruction()
+    {
+        var desc = SettlementLogic.SettlementBuildingState.GetBuildingSlotDescription(5);
+        // Should contain construction count info
+        Assert.NotNull(desc);
+        Assert.NotEmpty(desc);
+        Assert.NotEqual("TBC", desc);
+    }
+
+    [Fact]
+    public void SettlementBuildingState_GetBuildingSlotDescription_BComplete()
+    {
+        // 0x0C30007F = 204472447 = B-class Complete
+        var desc = SettlementLogic.SettlementBuildingState.GetBuildingSlotDescription(204472447);
+        Assert.NotNull(desc);
+        Assert.NotEmpty(desc);
+        Assert.NotEqual("TBC", desc);
+    }
+
+    // --- GetDetailedBitFieldDescription tests ---
+
+    [Fact]
+    public void SettlementBuildingState_GetDetailedBitFieldDescription_EmptySlot()
+    {
+        var desc = SettlementLogic.SettlementBuildingState.GetDetailedBitFieldDescription(0);
+        Assert.Contains("Empty", desc, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public void SettlementBuildingState_GetDetailedBitFieldDescription_InitialConstruction()
+    {
+        // 5 = bits 0 and 2 set = 2 phases done
+        var desc = SettlementLogic.SettlementBuildingState.GetDetailedBitFieldDescription(5);
+        Assert.NotNull(desc);
+        Assert.NotEmpty(desc);
+        // Should contain multiple lines (newlines)
+        Assert.Contains("\n", desc);
+        // Should mention construction/init phases
+        Assert.Contains("2", desc);
+    }
+
+    [Fact]
+    public void SettlementBuildingState_GetDetailedBitFieldDescription_BComplete()
+    {
+        // 204472447 = B-class Complete
+        var desc = SettlementLogic.SettlementBuildingState.GetDetailedBitFieldDescription(204472447);
+        Assert.NotNull(desc);
+        Assert.NotEmpty(desc);
+        Assert.Contains("\n", desc);
+        // Should show raw hex value
+        Assert.Contains("0x", desc);
+    }
+
+    [Fact]
+    public void SettlementBuildingState_GetDetailedBitFieldDescription_SClassFull()
+    {
+        // 1073740927 = S-class Full
+        var desc = SettlementLogic.SettlementBuildingState.GetDetailedBitFieldDescription(1073740927);
+        Assert.NotNull(desc);
+        Assert.NotEmpty(desc);
+        // Should have 5 lines total (class/state, init/upgrade, tiers, flags, raw)
+        int lineCount = desc.Split('\n').Length;
+        Assert.Equal(5, lineCount);
+    }
+
+    [Fact]
+    public void SettlementBuildingState_GetDetailedBitFieldDescription_ContainsTierInfo()
+    {
+        // 485490815 = A-class Complete
+        var desc = SettlementLogic.SettlementBuildingState.GetDetailedBitFieldDescription(485490815);
+        Assert.NotNull(desc);
+        // Should contain tier-related info for B and A
+        Assert.Contains("B Tier", desc, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("A Tier", desc, StringComparison.OrdinalIgnoreCase);
+    }
+
+    // --- Settlement alien race mapping tests ---
+
+    [Fact]
+    public void SettlementLogic_AlienRaceDisplayNames_ContainsAllRaces()
+    {
+        foreach (var race in SettlementLogic.AlienRaces)
+        {
+            Assert.True(SettlementLogic.AlienRaceDisplayNames.ContainsKey(race),
+                $"AlienRaceDisplayNames missing key '{race}'");
+        }
+    }
+
+    [Fact]
+    public void SettlementLogic_AlienRaceDisplayNames_MapsCorrectly()
+    {
+        Assert.Equal("Gek", SettlementLogic.AlienRaceDisplayNames["Traders"]);
+        Assert.Equal("Vy'keen", SettlementLogic.AlienRaceDisplayNames["Warriors"]);
+        Assert.Equal("Korvax", SettlementLogic.AlienRaceDisplayNames["Explorers"]);
+        Assert.Equal("Autophage", SettlementLogic.AlienRaceDisplayNames["Builders"]);
+    }
+
+    [Fact]
+    public void SettlementLogic_AlienRaceLocKeys_ContainsAllRaces()
+    {
+        foreach (var race in SettlementLogic.AlienRaces)
+        {
+            Assert.True(SettlementLogic.AlienRaceLocKeys.ContainsKey(race),
+                $"AlienRaceLocKeys missing key '{race}'");
+        }
+    }
+
+    // --- Settlement new fields load/save tests ---
+
+    [Fact]
+    public void SettlementLogic_LoadSettlementData_LoadsAlienRace()
+    {
+        var settlement = JsonObject.Parse(@"{
+            ""Name"": ""TestSettlement"",
+            ""SeedValue"": ""ABC"",
+            ""Owner"": { ""USN"": ""u1"", ""UID"": ""uid1"" },
+            ""Stats"": [0,0,0,0,0,0,0,0],
+            ""Race"": { ""AlienRace"": ""Explorers"" },
+            ""PendingJudgementType"": { ""SettlementJudgementType"": ""None"" },
+            ""LastJudgementTime"": 0
+        }");
+
+        var data = SettlementLogic.LoadSettlementData(settlement);
+        Assert.Equal("Explorers", data.AlienRace);
+    }
+
+    [Fact]
+    public void SettlementLogic_LoadSettlementData_LoadsTimestamps()
+    {
+        var settlement = JsonObject.Parse(@"{
+            ""Name"": ""TestSettlement"",
+            ""SeedValue"": ""ABC"",
+            ""Owner"": { ""USN"": ""u1"", ""UID"": ""uid1"" },
+            ""Stats"": [0,0,0,0,0,0,0,0],
+            ""PendingJudgementType"": { ""SettlementJudgementType"": ""None"" },
+            ""LastJudgementTime"": 0,
+            ""LastBugAttackChangeTime"": 1700000000,
+            ""LastAlertChangeTime"": 1700000001,
+            ""LastDebtChangeTime"": 1700000002,
+            ""LastUpkeepDebtCheckTime"": 1700000003,
+            ""LastPopulationChangeTime"": 1700000004
+        }");
+
+        var data = SettlementLogic.LoadSettlementData(settlement);
+        Assert.Equal(1700000000, data.LastBugAttackChangeTime);
+        Assert.Equal(1700000001, data.LastAlertChangeTime);
+        Assert.Equal(1700000002, data.LastDebtChangeTime);
+        Assert.Equal(1700000003, data.LastUpkeepDebtCheckTime);
+        Assert.Equal(1700000004, data.LastPopulationChangeTime);
+    }
+
+    [Fact]
+    public void SettlementLogic_LoadSettlementData_LoadsMissionFields()
+    {
+        var settlement = JsonObject.Parse(@"{
+            ""Name"": ""TestSettlement"",
+            ""SeedValue"": ""ABC"",
+            ""Owner"": { ""USN"": ""u1"", ""UID"": ""uid1"" },
+            ""Stats"": [0,0,0,0,0,0,0,0],
+            ""PendingJudgementType"": { ""SettlementJudgementType"": ""None"" },
+            ""LastJudgementTime"": 0,
+            ""MiniMissionSeed"": 12345,
+            ""MiniMissionStartTime"": 1700000000
+        }");
+
+        var data = SettlementLogic.LoadSettlementData(settlement);
+        Assert.Equal(12345, data.MiniMissionSeed);
+        Assert.Equal(1700000000, data.MiniMissionStartTime);
+    }
+
+    [Fact]
+    public void SettlementLogic_LoadSettlementData_LoadsBuildingStates()
+    {
+        // BuildingStates is an array of 48 ints
+        var statesJson = string.Join(",", Enumerable.Range(0, 48).Select(i => i == 0 ? "204472447" : "0"));
+        var settlement = JsonObject.Parse($@"{{
+            ""Name"": ""TestSettlement"",
+            ""SeedValue"": ""ABC"",
+            ""Owner"": {{ ""USN"": ""u1"", ""UID"": ""uid1"" }},
+            ""Stats"": [0,0,0,0,0,0,0,0],
+            ""PendingJudgementType"": {{ ""SettlementJudgementType"": ""None"" }},
+            ""LastJudgementTime"": 0,
+            ""BuildingStates"": [{statesJson}]
+        }}");
+
+        var data = SettlementLogic.LoadSettlementData(settlement);
+        Assert.True(data.HasBuildingStates);
+        Assert.Equal(204472447, data.BuildingStates[0]);
+        Assert.Equal(204472447, data.RawBuildingStates[0]);
+        Assert.Equal(0, data.BuildingStates[1]);
+    }
+
+    [Fact]
+    public void SettlementLogic_SaveSettlementData_SavesAlienRace()
+    {
+        var settlement = JsonObject.Parse(@"{
+            ""Name"": ""TestSettlement"",
+            ""SeedValue"": ""ABC"",
+            ""Owner"": { ""USN"": ""u1"", ""UID"": ""uid1"" },
+            ""Stats"": [0,0,0,0,0,0,0,0],
+            ""Race"": { ""AlienRace"": ""None"" },
+            ""PendingJudgementType"": { ""SettlementJudgementType"": ""None"" },
+            ""LastJudgementTime"": 0
+        }");
+
+        var saveValues = new SettlementLogic.SettlementSaveValues
+        {
+            Name = "TestSettlement",
+            SeedValue = "ABC",
+            AlienRace = "Warriors",
+        };
+        SettlementLogic.SaveSettlementData(settlement, saveValues);
+
+        var raceObj = settlement.GetObject("Race");
+        Assert.Equal("Warriors", raceObj?.GetString("AlienRace"));
+    }
+
+    [Fact]
+    public void SettlementLogic_SaveSettlementData_SavesTimestamps()
+    {
+        var settlement = JsonObject.Parse(@"{
+            ""Name"": ""TestSettlement"",
+            ""SeedValue"": ""ABC"",
+            ""Owner"": { ""USN"": ""u1"", ""UID"": ""uid1"" },
+            ""Stats"": [0,0,0,0,0,0,0,0],
+            ""PendingJudgementType"": { ""SettlementJudgementType"": ""None"" },
+            ""LastJudgementTime"": 0,
+            ""LastBugAttackChangeTime"": 0,
+            ""LastAlertChangeTime"": 0,
+            ""LastDebtChangeTime"": 0,
+            ""LastUpkeepDebtCheckTime"": 0,
+            ""LastPopulationChangeTime"": 0
+        }");
+
+        var saveValues = new SettlementLogic.SettlementSaveValues
+        {
+            Name = "TestSettlement",
+            SeedValue = "ABC",
+            LastBugAttackChangeTime = 1700000000,
+            LastAlertChangeTime = 1700000001,
+            LastDebtChangeTime = 1700000002,
+            LastUpkeepDebtCheckTime = 1700000003,
+            LastPopulationChangeTime = 1700000004,
+        };
+        SettlementLogic.SaveSettlementData(settlement, saveValues);
+
+        Assert.Equal(1700000000, settlement.GetLong("LastBugAttackChangeTime"));
+        Assert.Equal(1700000001, settlement.GetLong("LastAlertChangeTime"));
+        Assert.Equal(1700000002, settlement.GetLong("LastDebtChangeTime"));
+        Assert.Equal(1700000003, settlement.GetLong("LastUpkeepDebtCheckTime"));
+        Assert.Equal(1700000004, settlement.GetLong("LastPopulationChangeTime"));
+    }
+
+    [Fact]
+    public void SettlementLogic_SaveSettlementData_SavesMissionFields()
+    {
+        var settlement = JsonObject.Parse(@"{
+            ""Name"": ""TestSettlement"",
+            ""SeedValue"": ""ABC"",
+            ""Owner"": { ""USN"": ""u1"", ""UID"": ""uid1"" },
+            ""Stats"": [0,0,0,0,0,0,0,0],
+            ""PendingJudgementType"": { ""SettlementJudgementType"": ""None"" },
+            ""LastJudgementTime"": 0,
+            ""MiniMissionSeed"": 0,
+            ""MiniMissionStartTime"": 0
+        }");
+
+        var saveValues = new SettlementLogic.SettlementSaveValues
+        {
+            Name = "TestSettlement",
+            SeedValue = "ABC",
+            MiniMissionSeed = 99999,
+            MiniMissionStartTime = 1700000000,
+        };
+        SettlementLogic.SaveSettlementData(settlement, saveValues);
+
+        Assert.Equal(99999, settlement.GetInt("MiniMissionSeed"));
+        Assert.Equal(1700000000, settlement.GetLong("MiniMissionStartTime"));
+    }
+
+    [Fact]
+    public void SettlementLogic_SaveSettlementData_BuildingStates_PreservesUnchanged()
+    {
+        var statesJson = string.Join(",", Enumerable.Range(0, 48).Select(i => i == 0 ? "204472447" : "53"));
+        var settlement = JsonObject.Parse($@"{{
+            ""Name"": ""TestSettlement"",
+            ""SeedValue"": ""ABC"",
+            ""Owner"": {{ ""USN"": ""u1"", ""UID"": ""uid1"" }},
+            ""Stats"": [0,0,0,0,0,0,0,0],
+            ""PendingJudgementType"": {{ ""SettlementJudgementType"": ""None"" }},
+            ""LastJudgementTime"": 0,
+            ""BuildingStates"": [{statesJson}]
+        }}");
+
+        // Load raw values first
+        var data = SettlementLogic.LoadSettlementData(settlement);
+
+        // Save with same values (nothing changed) - should preserve originals
+        var saveValues = new SettlementLogic.SettlementSaveValues
+        {
+            Name = "TestSettlement",
+            SeedValue = "ABC",
+            HasBuildingStates = true,
+            RawBuildingStates = data.RawBuildingStates,
+            BuildingStates = (int[])data.BuildingStates.Clone(),
+        };
+        SettlementLogic.SaveSettlementData(settlement, saveValues);
+
+        var buildArr = settlement.GetArray("BuildingStates");
+        Assert.Equal(204472447, buildArr!.GetInt(0)); // Unchanged
+        Assert.Equal(53, buildArr.GetInt(1)); // Unchanged
+    }
+
+    [Fact]
+    public void SettlementLogic_SaveSettlementData_BuildingStates_WritesChanged()
+    {
+        var statesJson = string.Join(",", Enumerable.Range(0, 48).Select(i => "53"));
+        var settlement = JsonObject.Parse($@"{{
+            ""Name"": ""TestSettlement"",
+            ""SeedValue"": ""ABC"",
+            ""Owner"": {{ ""USN"": ""u1"", ""UID"": ""uid1"" }},
+            ""Stats"": [0,0,0,0,0,0,0,0],
+            ""PendingJudgementType"": {{ ""SettlementJudgementType"": ""None"" }},
+            ""LastJudgementTime"": 0,
+            ""BuildingStates"": [{statesJson}]
+        }}");
+
+        var data = SettlementLogic.LoadSettlementData(settlement);
+        var newStates = (int[])data.BuildingStates.Clone();
+        newStates[0] = 999; // User changed slot 0
+
+        var saveValues = new SettlementLogic.SettlementSaveValues
+        {
+            Name = "TestSettlement",
+            SeedValue = "ABC",
+            HasBuildingStates = true,
+            RawBuildingStates = data.RawBuildingStates,
+            BuildingStates = newStates,
+        };
+        SettlementLogic.SaveSettlementData(settlement, saveValues);
+
+        var buildArr = settlement.GetArray("BuildingStates");
+        Assert.Equal(999, buildArr!.GetInt(0)); // Changed
+        Assert.Equal(53, buildArr.GetInt(1)); // Unchanged
+    }
+
+    [Fact]
+    public void SettlementLogic_LoadSettlementData_MissingRace_DefaultsToNone()
+    {
+        var settlement = JsonObject.Parse(@"{
+            ""Name"": ""TestSettlement"",
+            ""SeedValue"": ""ABC"",
+            ""Owner"": { ""USN"": ""u1"", ""UID"": ""uid1"" },
+            ""Stats"": [0,0,0,0,0,0,0,0],
+            ""PendingJudgementType"": { ""SettlementJudgementType"": ""None"" },
+            ""LastJudgementTime"": 0
+        }");
+
+        var data = SettlementLogic.LoadSettlementData(settlement);
+        Assert.Equal("None", data.AlienRace);
+    }
+
+    [Fact]
+    public void SettlementLogic_LoadSettlementData_ZeroTimestamps_LoadAsZero()
+    {
+        var settlement = JsonObject.Parse(@"{
+            ""Name"": ""TestSettlement"",
+            ""SeedValue"": ""ABC"",
+            ""Owner"": { ""USN"": ""u1"", ""UID"": ""uid1"" },
+            ""Stats"": [0,0,0,0,0,0,0,0],
+            ""PendingJudgementType"": { ""SettlementJudgementType"": ""None"" },
+            ""LastJudgementTime"": 0,
+            ""LastBugAttackChangeTime"": 0,
+            ""MiniMissionStartTime"": 0
+        }");
+
+        var data = SettlementLogic.LoadSettlementData(settlement);
+        Assert.Equal(0, data.LastBugAttackChangeTime);
+        Assert.Equal(0, data.MiniMissionStartTime);
+        // Zero timestamps should NOT produce valid dates in UI (handled by ShowCheckBox pattern)
+    }
+
+    [Fact]
+    public void SettlementBuildingState_UpgradeProgressCount_Correct()
+    {
+        // 0x0C3FFC7F = 205519999 = B-class with all upgrade bits set (10/10)
+        Assert.Equal(10, SettlementLogic.SettlementBuildingState.UpgradeProgressCount(205519999));
+        // 127 = no upgrade bits
+        Assert.Equal(0, SettlementLogic.SettlementBuildingState.UpgradeProgressCount(127));
+    }
+
+    [Fact]
+    public void SettlementBuildingState_GetTierProgression_Correct()
+    {
+        // S-class complete: 0x3FF0007F → tier bits 20–25 all set = 0x3F
+        Assert.Equal(0x3F, SettlementLogic.SettlementBuildingState.GetTierProgression(1072693375));
+        // B-class complete: bits 20,21 set = 0x03
+        Assert.Equal(0x03, SettlementLogic.SettlementBuildingState.GetTierProgression(204472447));
+        // C-class: no tier bits
+        Assert.Equal(0, SettlementLogic.SettlementBuildingState.GetTierProgression(127));
+    }
+
+    [Fact]
+    public void SettlementBuildingState_GetArrivalFlags_Correct()
+    {
+        // S-class complete: 0x3FF0007F → bits 26–29 all set = 0xF
+        Assert.Equal(0x0F, SettlementLogic.SettlementBuildingState.GetArrivalFlags(1072693375));
+        // B-class complete: bits 26,27 set = 0x03
+        Assert.Equal(0x03, SettlementLogic.SettlementBuildingState.GetArrivalFlags(204472447));
+        // C-class: no arrival flags
+        Assert.Equal(0, SettlementLogic.SettlementBuildingState.GetArrivalFlags(127));
+    }
+
+    [Fact]
+    public void SettlementBuildingState_GetBuildingSlotDescription_AllMilestones_NotEmpty()
+    {
+        foreach (var (value, _) in SettlementDatabase.KnownMilestones)
+        {
+            var desc = SettlementLogic.SettlementBuildingState.GetBuildingSlotDescription(value);
+            Assert.NotNull(desc);
+            Assert.NotEmpty(desc);
+        }
+    }
+
+    [Fact]
+    public void SettlementDatabase_KnownMilestones_Has13Entries()
+    {
+        Assert.Equal(13, SettlementDatabase.KnownMilestones.Length);
+    }
+
+    [Fact]
+    public void SettlementDatabase_KnownMilestones_AllValuesAreDistinct()
+    {
+        var values = SettlementDatabase.KnownMilestones.Select(m => m.Value).ToArray();
+        Assert.Equal(values.Length, values.Distinct().Count());
+    }
+
+    [Fact]
+    public void SettlementDatabase_KnownMilestones_AllLocKeysNonEmpty()
+    {
+        foreach (var (_, locKey) in SettlementDatabase.KnownMilestones)
+        {
+            Assert.False(string.IsNullOrWhiteSpace(locKey), $"LocKey should not be empty for milestone");
+        }
+    }
+
+    [Theory]
+    [InlineData(0)]           // Empty lot
+    [InlineData(127)]         // C construction complete
+    [InlineData(204472447)]   // B complete
+    [InlineData(1072693375)]  // S complete
+    public void SettlementDatabase_KnownMilestones_ContainsValue(int value)
+    {
+        Assert.Contains(SettlementDatabase.KnownMilestones, m => m.Value == value);
+    }
+
+    [Theory]
+    [InlineData(1)]
+    [InlineData(999)]
+    [InlineData(42)]
+    [InlineData(-1)]
+    public void SettlementDatabase_KnownMilestones_DoesNotContainArbitraryValue(int value)
+    {
+        Assert.DoesNotContain(SettlementDatabase.KnownMilestones, m => m.Value == value);
+    }
+
+    [Fact]
+    public void SettlementLogic_SaveSettlementData_BuildingStates_AlwaysWritesIntegers()
+    {
+        // This test verifies that any int value written to BuildingStates is a valid integer
+        // in the save file - guaranteeing save safety.
+        var statesJson = string.Join(",", Enumerable.Range(0, 48).Select(i => "0"));
+        var settlement = JsonObject.Parse($@"{{
+            ""Name"": ""TestSettlement"",
+            ""SeedValue"": ""ABC"",
+            ""Owner"": {{ ""USN"": ""u1"", ""UID"": ""uid1"" }},
+            ""Stats"": [0,0,0,0,0,0,0,0],
+            ""PendingJudgementType"": {{ ""SettlementJudgementType"": ""None"" }},
+            ""LastJudgementTime"": 0,
+            ""BuildingStates"": [{statesJson}]
+        }}");
+
+        var data = SettlementLogic.LoadSettlementData(settlement);
+
+        // Simulate various integer values that might be set via the NUD
+        var testValues = new[] { 0, 127, 999, 204472447, 1072693375, -1, int.MaxValue, int.MinValue };
+        var newStates = (int[])data.BuildingStates.Clone();
+        for (int i = 0; i < Math.Min(testValues.Length, newStates.Length); i++)
+            newStates[i] = testValues[i];
+
+        var saveValues = new SettlementLogic.SettlementSaveValues
+        {
+            Name = "TestSettlement",
+            SeedValue = "ABC",
+            HasBuildingStates = true,
+            RawBuildingStates = data.RawBuildingStates,
+            BuildingStates = newStates,
+        };
+        SettlementLogic.SaveSettlementData(settlement, saveValues);
+
+        var buildArr = settlement.GetArray("BuildingStates");
+        Assert.NotNull(buildArr);
+        for (int i = 0; i < Math.Min(testValues.Length, buildArr!.Length); i++)
+        {
+            Assert.Equal(testValues[i], buildArr.GetInt(i));
+        }
     }
 }

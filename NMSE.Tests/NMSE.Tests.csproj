@@ -25,7 +25,7 @@
     <Compile Include="..\Data\GameItemDatabase.cs" Link="Data\GameItemDatabase.cs" />
     <Compile Include="..\Data\FrigateTraitDatabase.cs" Link="Data\FrigateTraitDatabase.cs" />
     <Compile Include="..\Data\InventoryStackDatabase.cs" Link="Data\InventoryStackDatabase.cs" />
-    <Compile Include="..\Data\SettlementPerkDatabase.cs" Link="Data\SettlementPerkDatabase.cs" />
+    <Compile Include="..\Data\SettlementDatabase.cs" Link="Data\SettlementDatabase.cs" />
     <Compile Include="..\Data\RewardDatabase.cs" Link="Data\RewardDatabase.cs" />
     <Compile Include="..\Data\WordDatabase.cs" Link="Data\WordDatabase.cs" />
     <Compile Include="..\Data\CompanionDatabase.cs" Link="Data\CompanionDatabase.cs" />
@@ -76,6 +76,7 @@
   <!-- Core Logic classes (pure data logic, no WinForms dependency) -->
   <ItemGroup>
     <Compile Include="..\Core\StarshipLogic.cs" Link="Core\StarshipLogic.cs" />
+    <Compile Include="..\Core\MainStatsLogic.cs" Link="Core\MainStatsLogic.cs" />
     <Compile Include="..\Core\ExportConfig.cs" Link="Core\ExportConfig.cs" />
     <Compile Include="..\Core\MultitoolLogic.cs" Link="Core\MultitoolLogic.cs" />
     <Compile Include="..\Core\FreighterLogic.cs" Link="Core\FreighterLogic.cs" />

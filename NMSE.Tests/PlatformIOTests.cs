@@ -1,3 +1,4 @@
+using System.Text;
 using NMSE.IO;
 using NMSE.Models;
 
@@ -678,6 +679,107 @@ public class PlatformIOTests
             // The meta file should also have been created (mf_save.hg)
             string metaPath = MetaFileWriter.GetSteamMetaPath(savePath);
             Assert.True(File.Exists(metaPath), $"Meta file should exist at {metaPath}");
+        }
+        finally { Directory.Delete(tmpDir, true); }
+    }
+
+    [Fact]
+    public void ContainersIndexManager_ParseContainersIndex_ResolvesNonHyphenatedGuidDirs()
+    {
+        // Xbox Game Pass blob directories use the compact "N" GUID format (no hyphens).
+        // Verify that ParseContainersIndex resolves them correctly.
+        string tmpDir = Path.Combine(Path.GetTempPath(), $"nmse_test_xbox_guid_{Guid.NewGuid():N}");
+        Directory.CreateDirectory(tmpDir);
+        try
+        {
+            Guid testGuid = Guid.NewGuid();
+
+            // Create the blob directory with the uppercase no-hyphens name (Xbox default format)
+            string blobDir = Path.Combine(tmpDir, testGuid.ToString("N").ToUpperInvariant());
+            Directory.CreateDirectory(blobDir);
+
+            // Build a minimal valid containers.index binary.
+            // The parser requires at least 200 bytes, so we pad to that length.
+            using var ms = new MemoryStream();
+            using var w = new BinaryWriter(ms);
+
+            // ---- global header ----
+            w.Write(14);  // header magic
+            w.Write(1L);  // container count = 1
+
+            // processIdentifier (dynamic string): length=0
+            w.Write(0);
+            // lastModifiedTime(8) + syncState(4)
+            w.Write(0L);
+            w.Write(0);
+            // accountGuid (dynamic string): length=0
+            w.Write(0);
+            // footer(8)
+            w.Write(268435456L); // 0x10000000
+
+            // ---- entry 1 ----
+            // identifier1 (dynamic string): "Slot1Auto" (9 chars = 18 bytes UTF-16)
+            string id = "Slot1Auto";
+            w.Write(id.Length);
+            w.Write(Encoding.Unicode.GetBytes(id));
+            // identifier2 (dynamic string): length=0
+            w.Write(0);
+            // syncTime (dynamic string): length=0
+            w.Write(0);
+
+            // Fixed fields: blobExt(1) + syncState(4) + guid(16) + lastMod(8) + empty(8) + totalSize(8) = 45
+            w.Write((byte)1); // blob extension
+            w.Write(0);       // sync state
+            w.Write(testGuid.ToByteArray()); // directory GUID
+            w.Write(0L);      // last modified
+            w.Write(0L);      // empty
+            w.Write(0L);      // total size
+
+            // Pad to at least 200 bytes (parser's minimum size check)
+            while (ms.Position < 200)
+                w.Write((byte)0);
+
+            byte[] data = ms.ToArray();
+            string indexPath = Path.Combine(tmpDir, "containers.index");
+            File.WriteAllBytes(indexPath, data);
+
+            var slots = ContainersIndexManager.ParseContainersIndex(indexPath);
+
+            // The slot should be found and its BlobDirectoryPath should point to
+            // the no-hyphens uppercase directory (which exists on disk)
+            Assert.True(slots.ContainsKey("Slot1Auto"), "Expected Slot1Auto in parsed slots");
+            Assert.Equal(blobDir, slots["Slot1Auto"].BlobDirectoryPath);
+            Assert.True(Directory.Exists(slots["Slot1Auto"].BlobDirectoryPath),
+                "BlobDirectoryPath should point to an existing directory");
+        }
+        finally { Directory.Delete(tmpDir, true); }
+    }
+
+    [Fact]
+    public void FindDefaultSaveDirectory_XboxGamePass_NavigatesIntoWgsDir()
+    {
+        // Verify the expected Xbox Game Pass path structure:
+        // {root}/HelloGames.NoMansSky_bs190hzg1sesy/SystemAppData/wgs/{SaveId}/containers.index
+        // The method should return the {SaveId} directory, not the HelloGames root.
+        //
+        // This test cannot run FindDefaultSaveDirectory directly (it uses Environment.SpecialFolder)
+        // so we just verify that DetectPlatform works correctly on the nested directory.
+        string tmpDir = Path.Combine(Path.GetTempPath(), $"nmse_test_xbox_nested_{Guid.NewGuid():N}");
+        try
+        {
+            string saveIdDir = Path.Combine(tmpDir, "HelloGames.NoMansSky_bs190hzg1sesy",
+                "SystemAppData", "wgs", "AABBCCDD00112233");
+            Directory.CreateDirectory(saveIdDir);
+            File.WriteAllBytes(Path.Combine(saveIdDir, "containers.index"), new byte[] { 0 });
+
+            // DetectPlatform on the SaveId dir (containing containers.index) should work
+            var platform = SaveFileManager.DetectPlatform(saveIdDir);
+            Assert.Equal(SaveFileManager.Platform.XboxGamePass, platform);
+
+            // DetectPlatform on the HelloGames root should NOT detect Xbox
+            string helloGamesRoot = Path.Combine(tmpDir, "HelloGames.NoMansSky_bs190hzg1sesy");
+            var rootPlatform = SaveFileManager.DetectPlatform(helloGamesRoot);
+            Assert.Equal(SaveFileManager.Platform.Unknown, rootPlatform);
         }
         finally { Directory.Delete(tmpDir, true); }
     }

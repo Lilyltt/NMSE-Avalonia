@@ -211,14 +211,8 @@ public partial class MainFormResources : Form
 
         // Load the application icon for the window title bar and taskbar.
         // The icon is stored in _appIcon so it can be re-applied after the
-        // Opacity 0→1 transition in the Shown handler.  That transition
-        // removes WS_EX_LAYERED from the window, which can drop the taskbar
-        // icon on some Windows builds (observed: works in Debug, fails in
-        // Release due to JIT-timing differences in layered-window teardown).
-        //
-        // Primary: load from the ICO file copied to the output directory —
-        //          this is the most robust path (no ResourceManager, no
-        //          assembly-embedded-resource naming quirks).
+        // Opacity 0->1 hack for WinForms window rendering quirks + JIT delays
+        // Primary: load from the ICO file copied to the output directory.
         // Fallback: Properties.Resources.AppIcon (ResourceManager approach).
         _appIcon = LoadAppIcon();
         if (_appIcon != null)
@@ -243,8 +237,7 @@ public partial class MainFormResources : Form
 
     /// <summary>
     /// Loads the application icon using the most reliable method available.
-    /// Primary: reads the ICO file from the output directory (no ResourceManager
-    /// dependency — works identically in Debug and Release).
+    /// Primary: reads the ICO file from the output directory.
     /// Fallback: Properties.Resources.AppIcon via the compiled .resources blob.
     /// </summary>
     private static Icon? LoadAppIcon()
@@ -315,7 +308,7 @@ public partial class MainFormResources : Form
         }
         _menuStrip.Items.Add(_languageMenu);
 
-        // Help menu — store item references for robust localisation
+        // Help menu (store item references for robust localisation)
         _helpMenu = new ToolStripMenuItem("&Help");
         _helpGitHubItem = new ToolStripMenuItem("&GitHub Page", null, OnGitHub);
         _helpSponsorItem = new ToolStripMenuItem("&Sponsor Development", null, OnSponsor);
@@ -643,7 +636,7 @@ public partial class MainFormResources : Form
 
             // Load optional JSON databases (fall back to hardcoded if files don't exist)
             FrigateTraitDatabase.LoadFromFile(Path.Combine(jsonPath, "FrigateTraits.json"));
-            SettlementPerkDatabase.LoadFromFile(Path.Combine(jsonPath, "SettlementPerks.json"));
+            SettlementDatabase.LoadFromFile(Path.Combine(jsonPath, "SettlementPerks.json"));
             WikiGuideDatabase.LoadFromFile(Path.Combine(jsonPath, "WikiGuide.json"));
 
             // Load word database for Known Words feature (from Words.json)
@@ -732,7 +725,7 @@ public partial class MainFormResources : Form
             _totalDatabaseItems = _database.Items.Count
                 + (_wordDatabase?.Count ?? 0)
                 + FrigateTraitDatabase.Traits.Count
-                + SettlementPerkDatabase.Perks.Count
+                + SettlementDatabase.Perks.Count
                 + RewardDatabase.Count
                 + InventoryStackDatabase.Count
                 + UiStrings.TotalKeyCount;
@@ -914,7 +907,8 @@ public partial class MainFormResources : Form
             {
                 // Odd-numbered saves are manual; even-numbered are auto
                 string numPart = fileName.Replace("save", "").Replace(".hg", "");
-                bool isAuto = int.TryParse(numPart, out int num) && num % 2 == 0;
+                bool isAuto = int.TryParse(numPart, System.Globalization.NumberStyles.Integer,
+                    System.Globalization.CultureInfo.InvariantCulture, out int num) && num % 2 == 0;
                 suffix = isAuto ? " (Auto)" : " (Manual)";
             }
 
@@ -1200,7 +1194,7 @@ public partial class MainFormResources : Form
         if (_ps4MemoryDatPath != null && _platformSlotIdentifiers != null
             && slotIndex >= 0 && slotIndex < _platformSlotIdentifiers.Count)
         {
-            int memSlot = int.Parse(_platformSlotIdentifiers[slotIndex]);
+            int memSlot = int.Parse(_platformSlotIdentifiers[slotIndex], System.Globalization.CultureInfo.InvariantCulture);
             LoadPS4MemoryDatSaveData(_ps4MemoryDatPath, memSlot);
             return;
         }
@@ -1715,7 +1709,7 @@ public partial class MainFormResources : Form
             _recipeDatabase.ApplyLocalisation(_localisationService);
             TitleDatabase.ApplyLocalisation(_localisationService);
             FrigateTraitDatabase.ApplyLocalisation(_localisationService);
-            SettlementPerkDatabase.ApplyLocalisation(_localisationService);
+            SettlementDatabase.ApplyLocalisation(_localisationService);
             WikiGuideDatabase.ApplyLocalisation(_localisationService);
             _accountPanel.RefreshRewardNames();
             _frigatePanel.RefreshTraitCombos();
@@ -1794,7 +1788,7 @@ public partial class MainFormResources : Form
                         _recipeDatabase.RevertLocalisation();
                         TitleDatabase.RevertLocalisation();
                         FrigateTraitDatabase.RevertLocalisation();
-                        SettlementPerkDatabase.RevertLocalisation();
+                        SettlementDatabase.RevertLocalisation();
                         WikiGuideDatabase.RevertLocalisation();
                     }
                     else
@@ -1806,7 +1800,7 @@ public partial class MainFormResources : Form
                         _recipeDatabase.ApplyLocalisation(_localisationService);
                         TitleDatabase.ApplyLocalisation(_localisationService);
                         FrigateTraitDatabase.ApplyLocalisation(_localisationService);
-                        SettlementPerkDatabase.ApplyLocalisation(_localisationService);
+                        SettlementDatabase.ApplyLocalisation(_localisationService);
                         WikiGuideDatabase.ApplyLocalisation(_localisationService);
                     }
                 });
@@ -1923,9 +1917,9 @@ public partial class MainFormResources : Form
                     toolsMenu.DropDownItems[1].Text = UiStrings.Get("menu.tools.import_json");
                 }
             }
-            // Language — use stored field reference, BCP 47 tags stay as-is
+            // Language (use stored field reference, BCP 47 tags stay as-is)
             _languageMenu.Text = UiStrings.Get("menu.language");
-            // Help — use stored field references (avoids fragile hardcoded indices)
+            // Help (use stored field references to avoid fragile hardcoded indices)
             _helpMenu.Text = UiStrings.Get("menu.help");
             _helpGitHubItem.Text = UiStrings.Get("menu.help.github");
             _helpSponsorItem.Text = UiStrings.Get("menu.help.sponsor");
@@ -2001,7 +1995,7 @@ public partial class MainFormResources : Form
     // ---- Update functionality ----
 
     private static Version CurrentAppVersion =>
-        new(int.Parse(VerMajor), int.Parse(VerMinor), int.Parse(VerPatch));
+        new(int.Parse(VerMajor, System.Globalization.CultureInfo.InvariantCulture), int.Parse(VerMinor, System.Globalization.CultureInfo.InvariantCulture), int.Parse(VerPatch, System.Globalization.CultureInfo.InvariantCulture));
 
     /// <summary>
     /// Silent background update check that runs after the form is shown.
