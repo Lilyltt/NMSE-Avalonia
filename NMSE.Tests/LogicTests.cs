@@ -6663,17 +6663,133 @@ public class LogicTests
     }
 
     [Fact]
-    public void JsonParser_RawHighBytes_ReturnsBinaryData()
+    public void JsonParser_RawHighBytes_ValidUtf8_ReturnsDecodedString()
     {
-        // Simulate what happens when Latin-1 decoded save data contains raw bytes
-        // >= 0x80 (e.g. techpack binary payloads). These raw chars in the JSON source
-        // must be detected as binary data.
-        // Build a JSON string with a raw char >= 0x80 (Latin-1 byte 0xCE)
+        // When Latin-1 decoded save data contains raw bytes that form valid
+        // UTF-8 sequences (e.g. a Greek save name), the parser must decode
+        // them as UTF-8 text, NOT return BinaryData.
+        // CE BB is the UTF-8 encoding of λ (U+03BB).
         string json = "{\"Data\": \"" + (char)0xCE + (char)0xBB + "\"}";
         var obj = JsonObject.Parse(json);
 
         var value = obj.Get("Data");
+        Assert.IsType<string>(value);
+        Assert.Equal("\u03BB", (string)value!); // λ
+    }
+
+    [Fact]
+    public void JsonParser_RawHighBytes_InvalidUtf8_ReturnsBinaryData()
+    {
+        // A lone continuation byte (0x80) without a preceding start byte is
+        // invalid UTF-8, so this must remain BinaryData.
+        string json = "{\"Data\": \"" + (char)0x80 + (char)0x01 + "\"}";
+        var obj = JsonObject.Parse(json);
+
+        var value = obj.Get("Data");
         Assert.IsType<BinaryData>(value);
+    }
+
+    [Fact]
+    public void JsonParser_RawUtf8_GreekSaveName_ReturnsString()
+    {
+        // Simulate a save name "λŦLλS Breach" stored as raw UTF-8 bytes
+        // read through Latin-1 encoding (the exact scenario from the bug report).
+        // λ = CE BB, Ŧ = C5 A6 in UTF-8
+        string latin1 = "" + (char)0xCE + (char)0xBB     // λ
+                            + (char)0xC5 + (char)0xA6     // Ŧ
+                            + "L"
+                            + (char)0xCE + (char)0xBB     // λ
+                            + "S Breach";
+        string json = "{\"SaveName\": \"" + latin1 + "\"}";
+        var obj = JsonObject.Parse(json);
+
+        var value = obj.Get("SaveName");
+        Assert.IsType<string>(value);
+        Assert.Equal("\u03BB\u0166L\u03BBS Breach", (string)value!);
+    }
+
+    [Fact]
+    public void JsonParser_RawUtf8_CjkCharacters_ReturnsString()
+    {
+        // CJK character 漢 = E6 BC A2 in UTF-8
+        // Japanese あ = E3 81 82 in UTF-8
+        string latin1 = "" + (char)0xE6 + (char)0xBC + (char)0xA2   // 漢
+                            + (char)0xE3 + (char)0x81 + (char)0x82;  // あ
+        string json = "{\"Name\": \"" + latin1 + "\"}";
+        var obj = JsonObject.Parse(json);
+
+        var value = obj.Get("Name");
+        Assert.IsType<string>(value);
+        Assert.Equal("漢あ", (string)value!);
+    }
+
+    [Fact]
+    public void JsonParser_RawUtf8_KoreanCharacters_ReturnsString()
+    {
+        // Korean 한 = ED 95 9C in UTF-8
+        string latin1 = "" + (char)0xED + (char)0x95 + (char)0x9C   // 한
+                            + "Test";
+        string json = "{\"Name\": \"" + latin1 + "\"}";
+        var obj = JsonObject.Parse(json);
+
+        var value = obj.Get("Name");
+        Assert.IsType<string>(value);
+        Assert.Equal("\uD55CTest", (string)value!); // 한 + "Test"
+    }
+
+    [Fact]
+    public void JsonParser_RawUtf8_CyrillicCharacters_ReturnsString()
+    {
+        // Cyrillic Б = D0 91 in UTF-8
+        string latin1 = "" + (char)0xD0 + (char)0x91;   // Б
+        string json = "{\"Name\": \"" + latin1 + "\"}";
+        var obj = JsonObject.Parse(json);
+
+        var value = obj.Get("Name");
+        Assert.IsType<string>(value);
+        Assert.Equal("\u0411", (string)value!); // Б
+    }
+
+    [Fact]
+    public void JsonParser_RawUtf8_SettlementName_MixedGreekAscii_ReturnsString()
+    {
+        // Simulate settlement name "00σφ011ηρ Station" as stored in save file.
+        // σ=CF83, φ=CF86, η=CEB7, ρ=CF81 in UTF-8
+        string latin1 = "00"
+            + (char)0xCF + (char)0x83    // σ
+            + (char)0xCF + (char)0x86    // φ
+            + "011"
+            + (char)0xCE + (char)0xB7    // η
+            + (char)0xCF + (char)0x81    // ρ
+            + " Station";
+        string json = "{\"Name\": \"" + latin1 + "\"}";
+        var obj = JsonObject.Parse(json);
+
+        var value = obj.Get("Name");
+        Assert.IsType<string>(value);
+        Assert.Equal("00\u03C3\u03C6011\u03B7\u03C1 Station", (string)value!);
+    }
+
+    [Fact]
+    public void JsonParser_RawUtf8_RoundTrip_PreservesContent()
+    {
+        // Parse a string with raw UTF-8 bytes, serialize it, parse again,
+        // and verify the content is preserved.
+        // λ = CE BB in UTF-8
+        string latin1 = "Hello " + (char)0xCE + (char)0xBB + " World";
+        string json = "{\"Name\": \"" + latin1 + "\"}";
+        var obj = JsonObject.Parse(json);
+
+        string name = obj.GetString("Name")!;
+        Assert.Equal("Hello \u03BB World", name);
+
+        // Re-serialize (this writes \u03BB as a \uXXXX escape)
+        string output = obj.ToString();
+
+        // Parse again
+        var obj2 = JsonObject.Parse(output);
+        string name2 = obj2.GetString("Name")!;
+        Assert.Equal(name, name2);
     }
 
     [Fact]
@@ -6689,6 +6805,49 @@ public class LogicTests
         var binary = (BinaryData)value!;
         Assert.Equal(5, binary.ToByteArray().Length);
         Assert.Equal(0x80, binary.ToByteArray()[0]);
+    }
+
+    [Fact]
+    public void JsonParser_TechPackHexEscape_ReturnsBinaryData()
+    {
+        // TechPack item IDs use \x hex escapes: e.g. ^808497C54986
+        // stored as \x5E\x80\x84\x97\xC5\x49\x86.
+        // This must remain BinaryData - the UTF-8 fix must not affect this path.
+        string json = """{"Id": "\x5E\x80\x84\x97\xC5\x49\x86"}""";
+        var obj = JsonObject.Parse(json);
+
+        var value = obj.Get("Id");
+        Assert.IsType<BinaryData>(value);
+        var binary = (BinaryData)value!;
+        Assert.Equal(7, binary.ToByteArray().Length);
+        Assert.Equal(0x5E, binary.ToByteArray()[0]); // '^'
+        Assert.Equal(0x80, binary.ToByteArray()[1]);
+    }
+
+    [Fact]
+    public void JsonParser_TechPackHexEscapeWithVariant_ReturnsBinaryData()
+    {
+        // TechPack ID with variant suffix: \x5E\x80\x84\x97\xC5\x49\x86#12345
+        // The \x escapes must keep this on the BinaryData path.
+        string json = """{"Id": "\x5E\x80\x84\x97\xC5\x49\x86#12345"}""";
+        var obj = JsonObject.Parse(json);
+
+        var value = obj.Get("Id");
+        Assert.IsType<BinaryData>(value);
+    }
+
+    [Fact]
+    public void JsonParser_RawTechPackBytes_InvalidUtf8_ReturnsBinaryData()
+    {
+        // Simulate TechPack bytes appearing as raw Latin-1 characters (no \x escapes).
+        // ^(0x5E) followed by 0x80 is invalid UTF-8 (continuation byte without
+        // start byte), so this must still be detected as BinaryData.
+        string json = "{\"Id\": \"" + (char)0x5E + (char)0x80 + (char)0x84
+            + (char)0x97 + (char)0xC5 + (char)0x49 + (char)0x86 + "\"}";
+        var obj = JsonObject.Parse(json);
+
+        var value = obj.Get("Id");
+        Assert.IsType<BinaryData>(value);
     }
 
     // --- SPEC_XOHELMET database entry test ---
