@@ -2200,51 +2200,51 @@ public class LogicTests
         Assert.Equal(18, CompanionLogic.MaxPetSlots);
     }
 
-    // --- DiscoveryLogic ----------------------------------------------
+    // --- CatalogueLogic ----------------------------------------------
 
     [Fact]
-    public void DiscoveryLogic_RaceColumns_HasExpectedEntries()
+    public void CatalogueLogic_RaceColumns_HasExpectedEntries()
     {
-        Assert.Equal(5, DiscoveryLogic.RaceColumns.Length);
-        Assert.Contains(("Gek", 0), DiscoveryLogic.RaceColumns);
-        Assert.Contains(("Vy'keen", 1), DiscoveryLogic.RaceColumns);
-        Assert.Contains(("Korvax", 2), DiscoveryLogic.RaceColumns);
-        Assert.Contains(("Atlas", 4), DiscoveryLogic.RaceColumns);
-        Assert.Contains(("Autophage", 8), DiscoveryLogic.RaceColumns);
+        Assert.Equal(5, CatalogueLogic.RaceColumns.Length);
+        Assert.Contains(("Gek", 0), CatalogueLogic.RaceColumns);
+        Assert.Contains(("Vy'keen", 1), CatalogueLogic.RaceColumns);
+        Assert.Contains(("Korvax", 2), CatalogueLogic.RaceColumns);
+        Assert.Contains(("Atlas", 4), CatalogueLogic.RaceColumns);
+        Assert.Contains(("Autophage", 8), CatalogueLogic.RaceColumns);
     }
 
     [Fact]
-    public void DiscoveryLogic_TechItemTypes_ContainsExpectedTypes()
+    public void CatalogueLogic_TechItemTypes_ContainsExpectedTypes()
     {
-        Assert.Contains("Technology", DiscoveryLogic.TechItemTypes);
-        Assert.Contains("Upgrades", DiscoveryLogic.TechItemTypes);
-        Assert.Contains("Others", DiscoveryLogic.TechItemTypes);
+        Assert.Contains("Technology", CatalogueLogic.TechItemTypes);
+        Assert.Contains("Upgrades", CatalogueLogic.TechItemTypes);
+        Assert.Contains("Others", CatalogueLogic.TechItemTypes);
     }
 
     [Fact]
-    public void DiscoveryLogic_TechItemTypes_CaseInsensitive()
+    public void CatalogueLogic_TechItemTypes_CaseInsensitive()
     {
-        Assert.Contains("technology", DiscoveryLogic.TechItemTypes);
-        Assert.Contains("TECHNOLOGY", DiscoveryLogic.TechItemTypes);
+        Assert.Contains("technology", CatalogueLogic.TechItemTypes);
+        Assert.Contains("TECHNOLOGY", CatalogueLogic.TechItemTypes);
     }
 
     [Fact]
-    public void DiscoveryLogic_ProductItemTypes_ContainsExpectedTypes()
+    public void CatalogueLogic_ProductItemTypes_ContainsExpectedTypes()
     {
-        Assert.Contains("Products", DiscoveryLogic.ProductItemTypes);
-        Assert.Contains("Constructed Technology", DiscoveryLogic.ProductItemTypes);
-        Assert.Contains("Curiosities", DiscoveryLogic.ProductItemTypes);
-        Assert.Contains("Corvette", DiscoveryLogic.ProductItemTypes);
+        Assert.Contains("Products", CatalogueLogic.ProductItemTypes);
+        Assert.Contains("Constructed Technology", CatalogueLogic.ProductItemTypes);
+        Assert.Contains("Curiosities", CatalogueLogic.ProductItemTypes);
+        Assert.Contains("Corvette", CatalogueLogic.ProductItemTypes);
     }
 
     [Fact]
-    public void DiscoveryLogic_TotalRaceCount_IsNine()
+    public void CatalogueLogic_TotalRaceCount_IsNine()
     {
-        Assert.Equal(9, DiscoveryLogic.TotalRaceCount);
+        Assert.Equal(9, CatalogueLogic.TotalRaceCount);
     }
 
     [Fact]
-    public void DiscoveryLogic_IsWordKnown_ReturnsTrueWhenKnown()
+    public void CatalogueLogic_IsWordKnown_ReturnsTrueWhenKnown()
     {
         var groups = new JsonArray();
         var entry = new JsonObject();
@@ -2256,72 +2256,72 @@ public class LogicTests
         entry.Set("Races", races);
         groups.Add(entry);
 
-        Assert.True(DiscoveryLogic.IsWordKnown(groups, "TestGroup", 0));
-        Assert.False(DiscoveryLogic.IsWordKnown(groups, "TestGroup", 1));
-        Assert.True(DiscoveryLogic.IsWordKnown(groups, "TestGroup", 2));
+        Assert.True(CatalogueLogic.IsWordKnown(groups, "TestGroup", 0));
+        Assert.False(CatalogueLogic.IsWordKnown(groups, "TestGroup", 1));
+        Assert.True(CatalogueLogic.IsWordKnown(groups, "TestGroup", 2));
     }
 
     [Fact]
-    public void DiscoveryLogic_IsWordKnown_UnknownGroup_ReturnsFalse()
+    public void CatalogueLogic_IsWordKnown_UnknownGroup_ReturnsFalse()
     {
         var groups = new JsonArray();
-        Assert.False(DiscoveryLogic.IsWordKnown(groups, "NoSuchGroup", 0));
+        Assert.False(CatalogueLogic.IsWordKnown(groups, "NoSuchGroup", 0));
     }
 
     [Fact]
-    public void DiscoveryLogic_SetWordKnown_AddsNewEntry()
+    public void CatalogueLogic_SetWordKnown_AddsNewEntry()
     {
         var groups = new JsonArray();
-        DiscoveryLogic.SetWordKnown(groups, "NewWord", 2, true);
+        CatalogueLogic.SetWordKnown(groups, "NewWord", 2, true);
 
         Assert.Equal(1, groups.Length);
-        Assert.True(DiscoveryLogic.IsWordKnown(groups, "NewWord", 2));
-        Assert.False(DiscoveryLogic.IsWordKnown(groups, "NewWord", 0));
+        Assert.True(CatalogueLogic.IsWordKnown(groups, "NewWord", 2));
+        Assert.False(CatalogueLogic.IsWordKnown(groups, "NewWord", 0));
     }
 
     [Fact]
-    public void DiscoveryLogic_SetWordKnown_RemovesEntryWhenAllFalse()
+    public void CatalogueLogic_SetWordKnown_RemovesEntryWhenAllFalse()
     {
         var groups = new JsonArray();
-        DiscoveryLogic.SetWordKnown(groups, "TestWord", 0, true);
+        CatalogueLogic.SetWordKnown(groups, "TestWord", 0, true);
         Assert.Equal(1, groups.Length);
 
-        DiscoveryLogic.SetWordKnown(groups, "TestWord", 0, false);
+        CatalogueLogic.SetWordKnown(groups, "TestWord", 0, false);
         Assert.Equal(0, groups.Length);
     }
 
     [Fact]
-    public void DiscoveryLogic_LoadAndSaveGlyphBitfield()
+    public void CatalogueLogic_LoadAndSaveGlyphBitfield()
     {
         var json = JsonObject.Parse(@"{ ""KnownPortalRunes"": 4095 }");
-        Assert.Equal(4095, DiscoveryLogic.LoadGlyphBitfield(json));
+        Assert.Equal(4095, CatalogueLogic.LoadGlyphBitfield(json));
 
-        DiscoveryLogic.SaveGlyphBitfield(json, 255);
-        Assert.Equal(255, DiscoveryLogic.LoadGlyphBitfield(json));
+        CatalogueLogic.SaveGlyphBitfield(json, 255);
+        Assert.Equal(255, CatalogueLogic.LoadGlyphBitfield(json));
     }
 
     [Fact]
-    public void DiscoveryLogic_LoadKnownItemIds_LoadsList()
+    public void CatalogueLogic_LoadKnownItemIds_LoadsList()
     {
         var json = JsonObject.Parse(@"{
             ""KnownTech"": [""^FUEL1"", ""^ANTIMATTER"", ""^HYPERDRIVE""]
         }");
 
-        var ids = DiscoveryLogic.LoadKnownItemIds(json, "KnownTech");
+        var ids = CatalogueLogic.LoadKnownItemIds(json, "KnownTech");
         Assert.Equal(3, ids.Count);
         Assert.Contains("^FUEL1", ids);
         Assert.Contains("^ANTIMATTER", ids);
     }
 
     [Fact]
-    public void DiscoveryLogic_SaveKnownItemIds_SavesList()
+    public void CatalogueLogic_SaveKnownItemIds_SavesList()
     {
         var json = JsonObject.Parse(@"{ ""KnownTech"": [] }");
         var ids = new List<string> { "^A", "^B", "^C" };
 
-        DiscoveryLogic.SaveKnownItemIds(json, "KnownTech", ids);
+        CatalogueLogic.SaveKnownItemIds(json, "KnownTech", ids);
 
-        var loaded = DiscoveryLogic.LoadKnownItemIds(json, "KnownTech");
+        var loaded = CatalogueLogic.LoadKnownItemIds(json, "KnownTech");
         Assert.Equal(3, loaded.Count);
         Assert.Equal("^A", loaded[0]);
         Assert.Equal("^B", loaded[1]);
@@ -2329,125 +2329,125 @@ public class LogicTests
     }
 
     [Fact]
-    public void DiscoveryLogic_SetWordFlagsForRace_LearnsAllWordsForRace()
+    public void CatalogueLogic_SetWordFlagsForRace_LearnsAllWordsForRace()
     {
         var groups = new JsonArray();
         var words = CreateTestWordEntries();
 
-        int count = DiscoveryLogic.SetWordFlagsForRace(groups, words, 0, true); // Gek
+        int count = CatalogueLogic.SetWordFlagsForRace(groups, words, 0, true); // Gek
 
         // word1 has Gek group, word2 does not, word3 has Gek group
         Assert.Equal(2, count);
-        Assert.True(DiscoveryLogic.IsWordKnown(groups, "^TRA_W1", 0));
-        Assert.True(DiscoveryLogic.IsWordKnown(groups, "^TRA_W3", 0));
+        Assert.True(CatalogueLogic.IsWordKnown(groups, "^TRA_W1", 0));
+        Assert.True(CatalogueLogic.IsWordKnown(groups, "^TRA_W3", 0));
     }
 
     [Fact]
-    public void DiscoveryLogic_SetWordFlagsForRace_UnlearnsAllWordsForRace()
+    public void CatalogueLogic_SetWordFlagsForRace_UnlearnsAllWordsForRace()
     {
         var groups = new JsonArray();
         var words = CreateTestWordEntries();
 
         // Learn first
-        DiscoveryLogic.SetWordFlagsForRace(groups, words, 0, true);
-        Assert.True(DiscoveryLogic.IsWordKnown(groups, "^TRA_W1", 0));
+        CatalogueLogic.SetWordFlagsForRace(groups, words, 0, true);
+        Assert.True(CatalogueLogic.IsWordKnown(groups, "^TRA_W1", 0));
 
         // Unlearn
-        int count = DiscoveryLogic.SetWordFlagsForRace(groups, words, 0, false);
+        int count = CatalogueLogic.SetWordFlagsForRace(groups, words, 0, false);
         Assert.Equal(2, count);
-        Assert.False(DiscoveryLogic.IsWordKnown(groups, "^TRA_W1", 0));
-        Assert.False(DiscoveryLogic.IsWordKnown(groups, "^TRA_W3", 0));
+        Assert.False(CatalogueLogic.IsWordKnown(groups, "^TRA_W1", 0));
+        Assert.False(CatalogueLogic.IsWordKnown(groups, "^TRA_W3", 0));
     }
 
     [Fact]
-    public void DiscoveryLogic_SetWordFlagsForRace_DoesNotAffectOtherRaces()
+    public void CatalogueLogic_SetWordFlagsForRace_DoesNotAffectOtherRaces()
     {
         var groups = new JsonArray();
         var words = CreateTestWordEntries();
 
         // Learn word1 for Vy'keen (race 1)
-        DiscoveryLogic.SetWordKnown(groups, "^WAR_W1", 1, true);
+        CatalogueLogic.SetWordKnown(groups, "^WAR_W1", 1, true);
 
         // Learn all for Gek (race 0)
-        DiscoveryLogic.SetWordFlagsForRace(groups, words, 0, true);
+        CatalogueLogic.SetWordFlagsForRace(groups, words, 0, true);
 
         // Vy'keen still known
-        Assert.True(DiscoveryLogic.IsWordKnown(groups, "^WAR_W1", 1));
+        Assert.True(CatalogueLogic.IsWordKnown(groups, "^WAR_W1", 1));
         // Gek now known
-        Assert.True(DiscoveryLogic.IsWordKnown(groups, "^TRA_W1", 0));
+        Assert.True(CatalogueLogic.IsWordKnown(groups, "^TRA_W1", 0));
     }
 
     [Fact]
-    public void DiscoveryLogic_SetWordFlagsForRace_SkipsWordsWithoutRace()
+    public void CatalogueLogic_SetWordFlagsForRace_SkipsWordsWithoutRace()
     {
         var groups = new JsonArray();
         var words = CreateTestWordEntries();
 
         // word2 only has Vy'keen (race 1), not Gek (race 0)
-        int count = DiscoveryLogic.SetWordFlagsForRace(groups, words, 0, true);
+        int count = CatalogueLogic.SetWordFlagsForRace(groups, words, 0, true);
         Assert.Equal(2, count); // word1 and word3, not word2
     }
 
     [Fact]
-    public void DiscoveryLogic_SetWordFlagsForEntries_LearnsAcrossAllRaces()
+    public void CatalogueLogic_SetWordFlagsForEntries_LearnsAcrossAllRaces()
     {
         var groups = new JsonArray();
         var words = CreateTestWordEntries();
 
-        var raceColumns = DiscoveryLogic.RaceColumns;
-        int count = DiscoveryLogic.SetWordFlagsForEntries(groups, words, raceColumns, true);
+        var raceColumns = CatalogueLogic.RaceColumns;
+        int count = CatalogueLogic.SetWordFlagsForEntries(groups, words, raceColumns, true);
 
         // word1: Gek + Vy'keen = 2, word2: Vy'keen = 1, word3: Gek + Korvax = 2 -> total 5
         Assert.Equal(5, count);
-        Assert.True(DiscoveryLogic.IsWordKnown(groups, "^TRA_W1", 0));
-        Assert.True(DiscoveryLogic.IsWordKnown(groups, "^WAR_W1", 1));
-        Assert.True(DiscoveryLogic.IsWordKnown(groups, "^WAR_W2", 1));
-        Assert.True(DiscoveryLogic.IsWordKnown(groups, "^TRA_W3", 0));
-        Assert.True(DiscoveryLogic.IsWordKnown(groups, "^EXP_W3", 2));
+        Assert.True(CatalogueLogic.IsWordKnown(groups, "^TRA_W1", 0));
+        Assert.True(CatalogueLogic.IsWordKnown(groups, "^WAR_W1", 1));
+        Assert.True(CatalogueLogic.IsWordKnown(groups, "^WAR_W2", 1));
+        Assert.True(CatalogueLogic.IsWordKnown(groups, "^TRA_W3", 0));
+        Assert.True(CatalogueLogic.IsWordKnown(groups, "^EXP_W3", 2));
     }
 
     [Fact]
-    public void DiscoveryLogic_SetWordFlagsForEntries_UnlearnsAcrossAllRaces()
+    public void CatalogueLogic_SetWordFlagsForEntries_UnlearnsAcrossAllRaces()
     {
         var groups = new JsonArray();
         var words = CreateTestWordEntries();
-        var raceColumns = DiscoveryLogic.RaceColumns;
+        var raceColumns = CatalogueLogic.RaceColumns;
 
         // Learn all first
-        DiscoveryLogic.SetWordFlagsForEntries(groups, words, raceColumns, true);
+        CatalogueLogic.SetWordFlagsForEntries(groups, words, raceColumns, true);
 
         // Unlearn just the first two words
         var subset = new List<WordEntry> { words[0], words[1] };
-        int count = DiscoveryLogic.SetWordFlagsForEntries(groups, subset, raceColumns, false);
+        int count = CatalogueLogic.SetWordFlagsForEntries(groups, subset, raceColumns, false);
 
         Assert.Equal(3, count); // word1: 2 races, word2: 1 race
-        Assert.False(DiscoveryLogic.IsWordKnown(groups, "^TRA_W1", 0));
-        Assert.False(DiscoveryLogic.IsWordKnown(groups, "^WAR_W1", 1));
-        Assert.False(DiscoveryLogic.IsWordKnown(groups, "^WAR_W2", 1));
+        Assert.False(CatalogueLogic.IsWordKnown(groups, "^TRA_W1", 0));
+        Assert.False(CatalogueLogic.IsWordKnown(groups, "^WAR_W1", 1));
+        Assert.False(CatalogueLogic.IsWordKnown(groups, "^WAR_W2", 1));
         // word3 still known
-        Assert.True(DiscoveryLogic.IsWordKnown(groups, "^TRA_W3", 0));
-        Assert.True(DiscoveryLogic.IsWordKnown(groups, "^EXP_W3", 2));
+        Assert.True(CatalogueLogic.IsWordKnown(groups, "^TRA_W3", 0));
+        Assert.True(CatalogueLogic.IsWordKnown(groups, "^EXP_W3", 2));
     }
 
     [Fact]
-    public void DiscoveryLogic_SetWordFlagsForEntries_EmptyList_ReturnsZero()
+    public void CatalogueLogic_SetWordFlagsForEntries_EmptyList_ReturnsZero()
     {
         var groups = new JsonArray();
         var emptyWords = new List<WordEntry>();
-        var raceColumns = DiscoveryLogic.RaceColumns;
+        var raceColumns = CatalogueLogic.RaceColumns;
 
-        int count = DiscoveryLogic.SetWordFlagsForEntries(groups, emptyWords, raceColumns, true);
+        int count = CatalogueLogic.SetWordFlagsForEntries(groups, emptyWords, raceColumns, true);
         Assert.Equal(0, count);
         Assert.Equal(0, groups.Length);
     }
 
     [Fact]
-    public void DiscoveryLogic_SetWordFlagsForRace_EmptyWordList_ReturnsZero()
+    public void CatalogueLogic_SetWordFlagsForRace_EmptyWordList_ReturnsZero()
     {
         var groups = new JsonArray();
         var emptyWords = new List<WordEntry>();
 
-        int count = DiscoveryLogic.SetWordFlagsForRace(groups, emptyWords, 0, true);
+        int count = CatalogueLogic.SetWordFlagsForRace(groups, emptyWords, 0, true);
         Assert.Equal(0, count);
         Assert.Equal(0, groups.Length);
     }
@@ -4881,12 +4881,12 @@ public class LogicTests
     // --- Product item types excludes technology ---
 
     [Fact]
-    public void DiscoveryLogic_ProductItemTypes_ExcludesTechnology()
+    public void CatalogueLogic_ProductItemTypes_ExcludesTechnology()
     {
-        Assert.DoesNotContain("Technology", DiscoveryLogic.ProductItemTypes);
-        Assert.DoesNotContain("Upgrades", DiscoveryLogic.ProductItemTypes);
-        Assert.Contains("Products", DiscoveryLogic.ProductItemTypes);
-        Assert.Contains("Buildings", DiscoveryLogic.ProductItemTypes);
+        Assert.DoesNotContain("Technology", CatalogueLogic.ProductItemTypes);
+        Assert.DoesNotContain("Upgrades", CatalogueLogic.ProductItemTypes);
+        Assert.Contains("Products", CatalogueLogic.ProductItemTypes);
+        Assert.Contains("Buildings", CatalogueLogic.ProductItemTypes);
     }
 
     // --- IsLearnableTechnology tests ---
@@ -4895,28 +4895,28 @@ public class LogicTests
     public void IsLearnableTechnology_NonProceduralNonMaintenance_ReturnsTrue()
     {
         var item = new GameItem { Id = "LASER", Category = "Weapon", IsProcedural = false };
-        Assert.True(DiscoveryLogic.IsLearnableTechnology(item));
+        Assert.True(CatalogueLogic.IsLearnableTechnology(item));
     }
 
     [Fact]
     public void IsLearnableTechnology_Procedural_ReturnsFalse()
     {
         var item = new GameItem { Id = "UP_LASER1", Category = "Weapon", IsProcedural = true };
-        Assert.False(DiscoveryLogic.IsLearnableTechnology(item));
+        Assert.False(CatalogueLogic.IsLearnableTechnology(item));
     }
 
     [Fact]
     public void IsLearnableTechnology_Maintenance_ReturnsFalse()
     {
         var item = new GameItem { Id = "YOURPORTALGLYPH0", Category = "Maintenance", IsProcedural = false };
-        Assert.False(DiscoveryLogic.IsLearnableTechnology(item));
+        Assert.False(CatalogueLogic.IsLearnableTechnology(item));
     }
 
     [Fact]
     public void IsLearnableTechnology_EmptyCategory_ReturnsTrue()
     {
         var item = new GameItem { Id = "TECH1", Category = "", IsProcedural = false };
-        Assert.True(DiscoveryLogic.IsLearnableTechnology(item));
+        Assert.True(CatalogueLogic.IsLearnableTechnology(item));
     }
 
     // --- IsLearnableProduct tests ---
@@ -4925,21 +4925,21 @@ public class LogicTests
     public void IsLearnableProduct_CraftableNonProcedural_ReturnsTrue()
     {
         var item = new GameItem { Id = "CRATE1", IsCraftable = true, IsProcedural = false, TradeCategory = "" };
-        Assert.True(DiscoveryLogic.IsLearnableProduct(item));
+        Assert.True(CatalogueLogic.IsLearnableProduct(item));
     }
 
     [Fact]
     public void IsLearnableProduct_NotCraftable_ReturnsFalse()
     {
         var item = new GameItem { Id = "ITEM1", IsCraftable = false, IsProcedural = false, TradeCategory = "" };
-        Assert.False(DiscoveryLogic.IsLearnableProduct(item));
+        Assert.False(CatalogueLogic.IsLearnableProduct(item));
     }
 
     [Fact]
     public void IsLearnableProduct_Procedural_ReturnsFalse()
     {
         var item = new GameItem { Id = "PROC1", IsCraftable = true, IsProcedural = true, TradeCategory = "" };
-        Assert.False(DiscoveryLogic.IsLearnableProduct(item));
+        Assert.False(CatalogueLogic.IsLearnableProduct(item));
     }
 
     [Fact]
@@ -4947,7 +4947,7 @@ public class LogicTests
     {
         // Items in the SpecialShop trade category are always learnable regardless of craftability
         var item = new GameItem { Id = "SPEC1", IsCraftable = false, IsProcedural = false, TradeCategory = "SpecialShop" };
-        Assert.True(DiscoveryLogic.IsLearnableProduct(item));
+        Assert.True(CatalogueLogic.IsLearnableProduct(item));
     }
 
     [Fact]
@@ -4955,14 +4955,14 @@ public class LogicTests
     {
         // Even procedural items in SpecialShop are learnable (IsSpecial overrides)
         var item = new GameItem { Id = "SPEC2", IsCraftable = false, IsProcedural = true, TradeCategory = "SpecialShop" };
-        Assert.True(DiscoveryLogic.IsLearnableProduct(item));
+        Assert.True(CatalogueLogic.IsLearnableProduct(item));
     }
 
     [Fact]
     public void IsLearnableProduct_CraftableAndSpecial_ReturnsTrue()
     {
         var item = new GameItem { Id = "BOTH1", IsCraftable = true, IsProcedural = false, TradeCategory = "SpecialShop" };
-        Assert.True(DiscoveryLogic.IsLearnableProduct(item));
+        Assert.True(CatalogueLogic.IsLearnableProduct(item));
     }
 
     // --- ExportConfig -----------------------------------------------

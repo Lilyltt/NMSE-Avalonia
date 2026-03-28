@@ -54,7 +54,7 @@ public partial class MainFormResources : Form
     private readonly SquadronPanel _squadronPanel;
     private readonly FleetPanel _fleetPanel;
     private readonly BasePanel _basePanel;
-    private readonly DiscoveryPanel _discoveryPanel;
+    private readonly CataloguePanel _cataloguePanel;
     private readonly MilestonePanel _milestonePanel;
     private readonly SettlementPanel _settlementPanel;
     private readonly ByteBeatPanel _byteBeatPanel;
@@ -123,7 +123,7 @@ public partial class MainFormResources : Form
         _squadronPanel = new SquadronPanel();
         _fleetPanel = new FleetPanel(_freighterPanel, _frigatePanel, _squadronPanel);
         _basePanel = new BasePanel();
-        _discoveryPanel = new DiscoveryPanel();
+        _cataloguePanel = new CataloguePanel();
         _milestonePanel = new MilestonePanel();
         _settlementPanel = new SettlementPanel();
         _byteBeatPanel = new ByteBeatPanel();
@@ -133,7 +133,7 @@ public partial class MainFormResources : Form
         _rawJsonPanel = new RawJsonPanel();
 
         // Embed Recipes as a sub-tab inside Discoveries
-        _discoveryPanel.AddRecipeTab(_recipePanel);
+        _cataloguePanel.AddRecipeTab(_recipePanel);
 
         // Track unsaved changes from inventory grids
         _exosuitPanel.DataModified += (s, e) => _hasUnsavedChanges = true;
@@ -141,7 +141,7 @@ public partial class MainFormResources : Form
         _shipPanel.DataModified += (s, e) => _hasUnsavedChanges = true;
         _freighterPanel.DataModified += (s, e) => _hasUnsavedChanges = true;
         _vehiclePanel.DataModified += (s, e) => _hasUnsavedChanges = true;
-        _discoveryPanel.DataModified += (s, e) => _hasUnsavedChanges = true;
+        _cataloguePanel.DataModified += (s, e) => _hasUnsavedChanges = true;
 
         // Wire up Save Utilities reload event
         _mainStatsPanel.ReloadRequested += (s, e) =>
@@ -367,7 +367,7 @@ public partial class MainFormResources : Form
         _tabControl.TabPages.Add(CreateTab("Exocraft", _vehiclePanel));             // 5
         _tabControl.TabPages.Add(CreateTab("Companions", _companionPanel));         // 6
         _tabControl.TabPages.Add(CreateTab("Bases & Storage", _basePanel));         // 7
-        _tabControl.TabPages.Add(CreateTab("Discoveries", _discoveryPanel));        // 8
+        _tabControl.TabPages.Add(CreateTab("Catalogue", _cataloguePanel));          // 8
         _tabControl.TabPages.Add(CreateTab("Milestones", _milestonePanel));         // 9
         _tabControl.TabPages.Add(CreateTab("Settlements", _settlementPanel));       // 10
         _tabControl.TabPages.Add(CreateTab("ByteBeats", _byteBeatPanel));           // 11
@@ -477,7 +477,7 @@ public partial class MainFormResources : Form
                 _basePanel.LoadData(_currentSaveData);
                 break;
             case 8: // Discoveries (includes Recipes sub-tab)
-                _discoveryPanel.LoadData(_currentSaveData);
+                _cataloguePanel.LoadData(_currentSaveData);
                 break;
             case 9: // Milestones
                 _milestonePanel.LoadData(_currentSaveData);
@@ -517,7 +517,7 @@ public partial class MainFormResources : Form
         if (_loadedTabIndices.Contains(5)) _vehiclePanel.SaveData(_currentSaveData);
         if (_loadedTabIndices.Contains(6)) _companionPanel.SaveData(_currentSaveData);
         if (_loadedTabIndices.Contains(7)) _basePanel.SaveData(_currentSaveData);
-        if (_loadedTabIndices.Contains(8)) _discoveryPanel.SaveData(_currentSaveData);
+        if (_loadedTabIndices.Contains(8)) _cataloguePanel.SaveData(_currentSaveData);
         if (_loadedTabIndices.Contains(9)) _milestonePanel.SaveData(_currentSaveData);
         if (_loadedTabIndices.Contains(10)) _settlementPanel.SaveData(_currentSaveData);
         if (_loadedTabIndices.Contains(11)) _byteBeatPanel.SaveData(_currentSaveData);
@@ -643,7 +643,7 @@ public partial class MainFormResources : Form
             _wordDatabase = new WordDatabase();
             string wordsPath = Path.Combine(jsonPath, "Words.json");
             _wordDatabase.LoadFromFile(wordsPath);
-            _discoveryPanel.SetWordDatabase(_wordDatabase);
+            _cataloguePanel.SetWordDatabase(_wordDatabase);
 
             // Initialize localisation service with lang/ directory
             string langDir = Path.Combine(jsonPath, "lang");
@@ -681,7 +681,7 @@ public partial class MainFormResources : Form
             _shipPanel.SetDatabase(_database);
             _multitoolPanel.SetDatabase(_database);
             _vehiclePanel.SetDatabase(_database);
-            _discoveryPanel.SetDatabase(_database);
+            _cataloguePanel.SetDatabase(_database);
             _settlementPanel.SetDatabase(_database);
             _fleetPanel.SetDatabase(_database);
             _basePanel.SetDatabase(_database);
@@ -690,7 +690,7 @@ public partial class MainFormResources : Form
             _shipPanel.SetIconManager(_iconManager);
             _multitoolPanel.SetIconManager(_iconManager);
             _vehiclePanel.SetIconManager(_iconManager);
-            _discoveryPanel.SetIconManager(_iconManager);
+            _cataloguePanel.SetIconManager(_iconManager);
             _milestonePanel.SetIconManager(_iconManager);
             _settlementPanel.SetIconManager(_iconManager);
             _basePanel.SetIconManager(_iconManager);
@@ -1645,7 +1645,7 @@ public partial class MainFormResources : Form
                 _companionPanel.LoadData(_currentSaveData);
                 _squadronPanel.LoadData(_currentSaveData);
                 _basePanel.LoadData(_currentSaveData);
-                _discoveryPanel.LoadData(_currentSaveData);
+                _cataloguePanel.LoadData(_currentSaveData);
                 _milestonePanel.LoadData(_currentSaveData);
                 _settlementPanel.LoadData(_currentSaveData);
                 _byteBeatPanel.LoadData(_currentSaveData);
@@ -1963,7 +1963,7 @@ public partial class MainFormResources : Form
         // ---- Panel-level localisation ----
         _mainStatsPanel.ApplyUiLocalisation();
         _milestonePanel.ApplyUiLocalisation();
-        _discoveryPanel.ApplyUiLocalisation();
+        _cataloguePanel.ApplyUiLocalisation();
         _settlementPanel.ApplyUiLocalisation();
         _byteBeatPanel.ApplyUiLocalisation();
         _accountPanel.ApplyUiLocalisation();

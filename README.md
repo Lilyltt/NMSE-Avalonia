@@ -106,7 +106,7 @@ Guides are available for [Wine][guide-wine], [Bottles][guide-bottles], [Whisky][
   </tr>
   <tr>
     <th style="width: 25%; text-align: center; padding: 8px;">Fleet</th>
-    <th style="width: 25%; text-align: center; padding: 8px;">Discoveries</th>
+    <th style="width: 25%; text-align: center; padding: 8px;">Catalogue</th>
     <th style="width: 25%; text-align: center; padding: 8px;">JSON Editor</th>
     <th style="width: 25%; text-align: center; padding: 8px;">Localisation</th>
   </tr>

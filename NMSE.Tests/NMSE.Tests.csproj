@@ -86,7 +86,7 @@
     <Compile Include="..\Core\FrigateLogic.cs" Link="Core\FrigateLogic.cs" />
     <Compile Include="..\Core\CompanionLogic.cs" Link="Core\CompanionLogic.cs" />
     <Compile Include="..\Core\MilestoneLogic.cs" Link="Core\MilestoneLogic.cs" />
-    <Compile Include="..\Core\DiscoveryLogic.cs" Link="Core\DiscoveryLogic.cs" />
+    <Compile Include="..\Core\CatalogueLogic.cs" Link="Core\CatalogueLogic.cs" />
     <Compile Include="..\Core\BaseLogic.cs" Link="Core\BaseLogic.cs" />
     <Compile Include="..\Core\SettlementLogic.cs" Link="Core\SettlementLogic.cs" />
     <Compile Include="..\Core\SquadronLogic.cs" Link="Core\SquadronLogic.cs" />

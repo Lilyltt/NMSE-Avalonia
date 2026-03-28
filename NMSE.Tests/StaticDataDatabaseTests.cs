@@ -1919,7 +1919,7 @@ public class StaticDataDatabaseTests
         Assert.NotNull(item);
         Assert.True(item!.IsCraftable, "CASING (Metal Plating) should be craftable");
         Assert.False(item.IsProcedural, "CASING should not be procedural");
-        Assert.True(Core.DiscoveryLogic.IsLearnableProduct(item),
+        Assert.True(Core.CatalogueLogic.IsLearnableProduct(item),
             "CASING should be learnable (craftable + non-procedural)");
     }
 
@@ -1935,7 +1935,7 @@ public class StaticDataDatabaseTests
         var item = db.GetItem("MAINT_FUEL1");
         Assert.NotNull(item);
         Assert.Equal("Maintenance", item!.Category);
-        Assert.False(Core.DiscoveryLogic.IsLearnableTechnology(item),
+        Assert.False(Core.CatalogueLogic.IsLearnableTechnology(item),
             "Maintenance tech should not be learnable");
     }
 
@@ -2011,7 +2011,7 @@ public class StaticDataDatabaseTests
         Assert.NotEmpty(specialShopItems);
         foreach (var item in specialShopItems)
         {
-            Assert.True(Core.DiscoveryLogic.IsLearnableProduct(item),
+            Assert.True(Core.CatalogueLogic.IsLearnableProduct(item),
                 $"SpecialShop item {item.Id} ({item.Name}) should be learnable");
         }
     }
