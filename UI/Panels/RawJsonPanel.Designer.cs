@@ -37,9 +37,10 @@ partial class RawJsonPanel
         {
             Dock = DockStyle.Fill,
             ColumnCount = 1,
-            RowCount = 3,
+            RowCount = 4,
             Padding = new Padding(5)
         };
+        layout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
         layout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
         layout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
         layout.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
@@ -72,6 +73,15 @@ partial class RawJsonPanel
         _validateButton = new Button { Text = "Validate", AutoSize = true, AutoSizeMode = AutoSizeMode.GrowAndShrink, MinimumSize = new Size(70, 0), Visible = false };
         _validateButton.Click += OnValidate;
 
+        _exportButton = new Button { Text = "Export", AutoSize = true, AutoSizeMode = AutoSizeMode.GrowAndShrink, MinimumSize = new Size(60, 0) };
+        _exportButton.Click += OnExport;
+
+        _importButton = new Button { Text = "Import", AutoSize = true, AutoSizeMode = AutoSizeMode.GrowAndShrink, MinimumSize = new Size(60, 0) };
+        _importButton.Click += OnImport;
+
+        _diffButton = new Button { Text = "Show Changes", AutoSize = true, AutoSizeMode = AutoSizeMode.GrowAndShrink, MinimumSize = new Size(90, 0) };
+        _diffButton.Click += OnShowDiff;
+
         _expandAllButton = new Button { Text = "Expand All", AutoSize = true, AutoSizeMode = AutoSizeMode.GrowAndShrink, MinimumSize = new Size(75, 0) };
         _expandAllButton.Click += async (_, _) => await ExpandAllBatchedAsync();
 
@@ -93,6 +103,9 @@ partial class RawJsonPanel
         _searchBox = new TextBox { Width = 200, PlaceholderText = "Search keys or values..." };
         _searchBox.KeyDown += (_, e) => { if (e.KeyCode == Keys.Enter) { OnSearch(); e.SuppressKeyPress = true; } };
 
+        _searchBackButton = new Button { Text = "◀", AutoSize = true, AutoSizeMode = AutoSizeMode.GrowAndShrink, MinimumSize = new Size(35, 0) };
+        _searchBackButton.Click += (_, _) => FindPrevious();
+
         _searchButton = new Button { Text = "Find", AutoSize = true, AutoSizeMode = AutoSizeMode.GrowAndShrink, MinimumSize = new Size(50, 0) };
         _searchButton.Click += (_, _) => OnSearch();
 
@@ -113,7 +126,8 @@ partial class RawJsonPanel
 
         toolbar.Controls.AddRange([_fileSelector, fileSep, _treeViewButton, _textViewButton, _expandAllButton, _stopExpandBtn, _collapseAllButton, sep,
             _formatButton, _validateButton,
-            _searchBox, _searchButton, _clearSearchButton, _statusLabel]);
+            _exportButton, _importButton, _diffButton,
+            _searchBox, _clearSearchButton, _searchBackButton, _searchButton, _statusLabel]);
 
         _treeView = new TreeView
         {
@@ -122,12 +136,18 @@ partial class RawJsonPanel
             LabelEdit = true,
             HideSelection = false,
             ShowNodeToolTips = true,
-            FullRowSelect = true
+            FullRowSelect = true,
+            ImageList = CreateTypeIconList(),
+            AllowDrop = true
         };
         _treeView.AfterLabelEdit += OnAfterLabelEdit;
         _treeView.NodeMouseDoubleClick += OnNodeDoubleClick;
         _treeView.BeforeExpand += OnBeforeExpand;
         _treeView.KeyDown += OnTreeKeyDown;
+        _treeView.AfterSelect += OnTreeNodeSelected;
+        _treeView.ItemDrag += OnTreeItemDrag;
+        _treeView.DragOver += OnTreeDragOver;
+        _treeView.DragDrop += OnTreeDragDrop;
 
         _contextMenu = new ContextMenuStrip();
         _contextMenu.Items.Add("Edit Value", null, (_, _) => BeginEditSelectedNode());
@@ -158,13 +178,24 @@ partial class RawJsonPanel
         _textPanel = new Panel { Dock = DockStyle.Fill, Visible = false };
         _textPanel.Controls.Add(_jsonTextBox);
 
+        _breadcrumbPanel = new FlowLayoutPanel
+        {
+            Dock = DockStyle.Fill,
+            AutoSize = true,
+            WrapContents = false,
+            FlowDirection = FlowDirection.LeftToRight,
+            Padding = new Padding(5, 0, 5, 0),
+            MaximumSize = new Size(0, 28)
+        };
+
         layout.Controls.Add(_titleLabel, 0, 0);
         layout.Controls.Add(toolbar, 0, 1);
+        layout.Controls.Add(_breadcrumbPanel, 0, 2);
 
         var contentPanel = new Panel { Dock = DockStyle.Fill };
         contentPanel.Controls.Add(_treePanel);
         contentPanel.Controls.Add(_textPanel);
-        layout.Controls.Add(contentPanel, 0, 2);
+        layout.Controls.Add(contentPanel, 0, 3);
 
         Controls.Add(layout);
         ResumeLayout(false);
@@ -189,4 +220,9 @@ partial class RawJsonPanel
     private ContextMenuStrip _contextMenu = null!;
     private ComboBox _fileSelector = null!;
     private Button _stopExpandBtn = null!;
+    private Button _searchBackButton = null!;
+    private Button _exportButton = null!;
+    private Button _importButton = null!;
+    private Button _diffButton = null!;
+    private FlowLayoutPanel _breadcrumbPanel = null!;
 }
