@@ -1,8 +1,49 @@
-## NMSE — No Man's Save Editor v1.0.369 (preview)
+## NMSE — No Man's Save Editor v1.0.374 (preview)
 
 > This is a preview build. Please practice safe backup practices and expect some bugs.
 
 ### Changelog
+
+#### Features:
+
+- Discoveries panel renamed to Catalogue to align with the game.
+- Optimise button added to Corvettes in the Starship panel (re-orders components for better handling stats and quicker loading times).
+<!-- - macOS .dmg available (require Wine/Whisky/etc. to be installed). -->
+- Raw JSON Editor improvements:
+    - Basic inline editing.
+    - In window export/import buttons.
+    - Simple 'show changes' diff viewer.
+    - Search back/forward.
+    - Basic notifier to show if changes were made.
+    - Breadcrumbs (with links) for current key/value.
+    - Basic type icons in tree ({} (properties), [] (arrays), A (text), # (numbers), ✓ (booleans), ∅ (null)).
+    - Drag-and-drop array reordering.
+    - Basic undo/redo stack for Edit, Add, Delete actions.
+    - Additional keyboard shortcuts:
+        - Copy (<kbd>Ctrl+C</kbd>)
+        - Search focus (<kbd>Ctrl+F</kbd>)
+        - Clear (<kbd>Esc</kbd>)
+        - Undo / Redo (<kbd>Ctrl+Z</kbd> / <kbd>Ctrl+Y</kbd>).
+        - Search forward / back (<kbd>F3</kbd> / <kbd>Shift+F3</kbd>)
+
+
+#### Bug Fixes:
+
+- Fix for XBOX Game Pass (container size and new header, blobs load into expected panels). (Issue [#18](https://github.com/vectorcmdr/NMSE/issues/18))
+- Fix for high byte characters and binary data (fixes special character parsing in some places).
+- Fix for caret stripping in Known Technologies and Known Products.
+- Raw JSON Editor fix for value write-back failing under some input conditions.
+- Corvette ship -> base matching algorithm updated with more robust approach.
+- Minor tweaks to Settlement UI.
+- Fix CSS typo in companion site.
+
+<br />
+
+
+<details>
+<summary>Previous Changelogs</summary>
+
+### Previous Changelog 1.0.369 (preview)
 
 #### Features:
 
@@ -26,11 +67,7 @@
 - Add additional safety for images in memory (if corruption in memory occurs).
 - Minor buttons resize fixes. (Issue [#9](https://github.com/vectorcmdr/NMSE/issues/9))
 
-<br />
-
-
-<details>
-<summary>Previous Changelogs</summary>
+<br/>
 
 ### Previous Changelog 1.0.362 (preview)
 
