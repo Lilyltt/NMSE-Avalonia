@@ -264,11 +264,27 @@ internal static class CatalogueLogic
     }
 
     /// <summary>
+    /// Strips the leading "^" prefix that the game uses in save-file IDs.
+    /// </summary>
+    internal static string StripCaretPrefix(string id) =>
+        id.Length > 1 && id[0] == '^' ? id[1..] : id;
+
+    /// <summary>
+    /// Ensures the "^" prefix that the game expects in save-file IDs.
+    /// </summary>
+    internal static string EnsureCaretPrefix(string id) =>
+        id.Length > 0 && id[0] != '^' ? "^" + id : id;
+
+    /// <summary>
     /// Loads the list of known item IDs from a named JSON array in the player state.
+    /// The save file stores IDs with a leading "^" prefix (e.g. "^LASER"), but the
+    /// game item database uses unprefixed IDs (e.g. "LASER"). This method strips
+    /// the prefix so that loaded IDs match the database, preventing duplicate-add
+    /// and incorrect-save bugs.
     /// </summary>
     /// <param name="playerState">The player state JSON object.</param>
     /// <param name="arrayName">The JSON key for the known items array.</param>
-    /// <returns>A list of known item ID strings.</returns>
+    /// <returns>A list of known item ID strings (without "^" prefix).</returns>
     internal static List<string> LoadKnownItemIds(JsonObject playerState, string arrayName)
     {
         var ids = new List<string>();
@@ -276,17 +292,18 @@ internal static class CatalogueLogic
         if (items == null) return ids;
 
         for (int i = 0; i < items.Length; i++)
-            ids.Add(items.GetString(i));
+            ids.Add(StripCaretPrefix(items.GetString(i)));
 
         return ids;
     }
 
     /// <summary>
     /// Saves a list of known item IDs back to a named JSON array in the player state.
+    /// Re-adds the "^" prefix that the game expects in save-file IDs.
     /// </summary>
     /// <param name="playerState">The player state JSON object.</param>
     /// <param name="arrayName">The JSON key for the known items array.</param>
-    /// <param name="ids">The item IDs to save.</param>
+    /// <param name="ids">The item IDs to save (with or without "^" prefix).</param>
     internal static void SaveKnownItemIds(JsonObject playerState, string arrayName, List<string> ids)
     {
         var items = playerState.GetArray(arrayName);
@@ -298,7 +315,7 @@ internal static class CatalogueLogic
 
         items.Clear();
         foreach (var id in ids)
-            items.Add(id);
+            items.Add(EnsureCaretPrefix(id));
     }
 
     /// <summary>
