@@ -167,13 +167,41 @@ internal static class StarshipLogic
                 if (!hasSeed) continue;
 
                 string name = ship.GetString("Name") ?? "";
+
+                // Resolve ship type from resource filename
+                string filename = "";
+                try { filename = resource?.GetString("Filename") ?? ""; } catch { }
+                string shipType = LookupShipTypeName(filename);
+
+                // Resolve class from inventory
+                string cls = "";
+                try
+                {
+                    var inv = ship.GetObject("Inventory");
+                    var classObj = inv?.GetObject("Class");
+                    cls = classObj?.GetString("InventoryClass") ?? "";
+                }
+                catch { }
+
+                string displayName;
                 if (string.IsNullOrEmpty(name))
-                    name = $"Ship {i + 1}";
-                list.Add(new ShipListItem(name, i));
+                {
+                    // No custom name — show slot, type, class: "[1] Hauler - C"
+                    string typeLabel = string.IsNullOrEmpty(shipType) ? "Ship" : shipType;
+                    string clsLabel = string.IsNullOrEmpty(cls) ? "?" : cls;
+                    displayName = $"[{i + 1}] {typeLabel} - {clsLabel}";
+                }
+                else
+                {
+                    // Named ship — show slot, name, class: "[5] VCF Blackbird - S"
+                    string clsLabel = string.IsNullOrEmpty(cls) ? "?" : cls;
+                    displayName = $"[{i + 1}] {name} - {clsLabel}";
+                }
+                list.Add(new ShipListItem(displayName, i));
             }
             catch
             {
-                list.Add(new ShipListItem($"Ship {i + 1}", i));
+                list.Add(new ShipListItem($"[{i + 1}] Ship - ?", i));
             }
         }
         return list;

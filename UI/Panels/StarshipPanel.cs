@@ -345,7 +345,23 @@ public partial class StarshipPanel : UserControl
     {
         if (_shipSelector.SelectedIndex < 0 || _shipSelector.Items.Count == 0) return;
         var item = (StarshipLogic.ShipListItem)_shipSelector.Items[_shipSelector.SelectedIndex]!;
-        string newName = string.IsNullOrWhiteSpace(_shipName.Text) ? $"Ship {item.DataIndex + 1}" : _shipName.Text;
+
+        // Resolve class label from the class combo
+        string cls = _shipClass.SelectedIndex >= 0 && _shipClass.SelectedIndex < StarshipLogic.ShipClasses.Length
+            ? StarshipLogic.ShipClasses[_shipClass.SelectedIndex] : "?";
+
+        string newName;
+        if (string.IsNullOrWhiteSpace(_shipName.Text))
+        {
+            // No custom name — use ship type
+            string shipType = (_shipType.SelectedItem as StarshipLogic.ShipTypeItem)?.InternalName ?? "Ship";
+            newName = $"[{item.DataIndex + 1}] {shipType} - {cls}";
+        }
+        else
+        {
+            newName = $"[{item.DataIndex + 1}] {_shipName.Text} - {cls}";
+        }
+
         item.DisplayName = newName;
         int idx = _shipSelector.SelectedIndex;
         _shipSelector.SelectedIndexChanged -= OnShipSelected;

@@ -231,9 +231,9 @@ public class LogicTests
 
         var ships = StarshipLogic.BuildShipList(json.GetArray("ShipOwnership")!);
         Assert.Equal(2, ships.Count);
-        Assert.Equal("Alpha", ships[0].DisplayName);
+        Assert.Equal("[1] Alpha - ?", ships[0].DisplayName);
         Assert.Equal(0, ships[0].DataIndex);
-        Assert.Equal("Beta", ships[1].DisplayName);
+        Assert.Equal("[3] Beta - ?", ships[1].DisplayName);
         Assert.Equal(2, ships[1].DataIndex);
     }
 
@@ -251,7 +251,8 @@ public class LogicTests
 
         var ships = StarshipLogic.BuildShipList(json.GetArray("Ships")!);
         Assert.Single(ships);
-        Assert.Equal("Ship 1", ships[0].DisplayName);
+        // Ship has no name and no Filename resource, so type resolves to localised "Unknown"
+        Assert.Equal("[1] Unknown - ?", ships[0].DisplayName);
     }
 
     [Fact]
@@ -259,6 +260,44 @@ public class LogicTests
     {
         Assert.Equal(4, StarshipLogic.ShipClasses.Length);
         Assert.Equal(new[] { "C", "B", "A", "S" }, StarshipLogic.ShipClasses);
+    }
+
+    [Fact]
+    public void StarshipLogic_BuildShipList_NamedShip_ShowsSlotNameClass()
+    {
+        // Named ship with class in inventory should show "[slot] Name - Class"
+        var json = JsonObject.Parse(@"{
+            ""Ships"": [
+                {
+                    ""Name"": ""VCF Blackbird"",
+                    ""Resource"": { ""Filename"": ""MODELS/COMMON/SPACECRAFT/FIGHTERS/FIGHTER_PROC.SCENE.MBIN"", ""Seed"": [true, ""0xABC""] },
+                    ""Inventory"": { ""Class"": { ""InventoryClass"": ""S"" } }
+                }
+            ]
+        }");
+
+        var ships = StarshipLogic.BuildShipList(json.GetArray("Ships")!);
+        Assert.Single(ships);
+        Assert.Equal("[1] VCF Blackbird - S", ships[0].DisplayName);
+    }
+
+    [Fact]
+    public void StarshipLogic_BuildShipList_UnnamedShip_ShowsSlotTypeClass()
+    {
+        // Unnamed ship with resolved type and class should show "[slot] Type - Class"
+        var json = JsonObject.Parse(@"{
+            ""Ships"": [
+                {
+                    ""Name"": """",
+                    ""Resource"": { ""Filename"": ""MODELS/COMMON/SPACECRAFT/FIGHTERS/FIGHTER_PROC.SCENE.MBIN"", ""Seed"": [true, ""0xABC""] },
+                    ""Inventory"": { ""Class"": { ""InventoryClass"": ""C"" } }
+                }
+            ]
+        }");
+
+        var ships = StarshipLogic.BuildShipList(json.GetArray("Ships")!);
+        Assert.Single(ships);
+        Assert.Equal("[1] Fighter - C", ships[0].DisplayName);
     }
 
     [Fact]
@@ -657,9 +696,9 @@ public class LogicTests
         // BuildShipList should return only valid ships, preserving original indices
         var list = StarshipLogic.BuildShipList(ships);
         Assert.Equal(2, list.Count);
-        Assert.Equal("Alpha", list[0].DisplayName);
+        Assert.Equal("[1] Alpha - ?", list[0].DisplayName);
         Assert.Equal(0, list[0].DataIndex);    // Original index preserved
-        Assert.Equal("Gamma", list[1].DisplayName);
+        Assert.Equal("[3] Gamma - ?", list[1].DisplayName);
         Assert.Equal(2, list[1].DataIndex);    // Original index preserved (NOT shifted to 1)
     }
 
@@ -7775,12 +7814,13 @@ public class LogicTests
     public void ConditionalClampStatValue_PreservesRaw_WhenUnchanged()
     {
         var rawValues = new Dictionary<string, double> { ["^SHIP_DAMAGE"] = 999.0 };
-        var range = BaseStatLimits.GetRange("Normal", "^SHIP_DAMAGE", StatCategory.Ship);
-        double clampedMax = range != null ? range.MaxValue : 100.0;
 
-        // UI shows clamped value (e.g. 100) - should return raw (999.0)
+        // With MaxValue=int.MaxValue, clamping 999 produces 999, which is what the UI shows.
+        // When the user doesn't change the displayed value (999), ConditionalClamp should
+        // return the original raw value (999).
+        double clampedRaw = BaseStatLimits.ClampStatValue("Normal", "^SHIP_DAMAGE", 999.0, StatCategory.Ship);
         double result = BaseStatLimits.ConditionalClampStatValue("Normal", "^SHIP_DAMAGE",
-            clampedMax, StatCategory.Ship, rawValues);
+            clampedRaw, StatCategory.Ship, rawValues);
         Assert.Equal(999.0, result);
     }
 
@@ -7814,6 +7854,48 @@ public class LogicTests
         bsv.Add(entry);
     }
 
+    [Fact]
+    public void BaseStatLimits_AllStatRanges_UseIntMaxValue()
+    {
+        // All base stat ranges should use int.MaxValue as their max value
+        foreach (var (entityType, stats) in BaseStatLimits.ShipStats)
+        {
+            foreach (var (statId, range) in stats)
+            {
+                Assert.Equal(0, range.MinValue);
+                Assert.Equal(int.MaxValue, range.MaxValue);
+            }
+        }
+        foreach (var (entityType, stats) in BaseStatLimits.WeaponStats)
+        {
+            foreach (var (statId, range) in stats)
+            {
+                Assert.Equal(0, range.MinValue);
+                Assert.Equal(int.MaxValue, range.MaxValue);
+            }
+        }
+        foreach (var (entityType, stats) in BaseStatLimits.FreighterStats)
+        {
+            foreach (var (statId, range) in stats)
+            {
+                Assert.Equal(0, range.MinValue);
+                Assert.Equal(int.MaxValue, range.MaxValue);
+            }
+        }
+    }
+
+    [Fact]
+    public void SettlementLogic_PopulationMax_Is400()
+    {
+        Assert.Equal(400, SettlementLogic.PopulationMax);
+    }
+
+    [Fact]
+    public void SettlementLogic_PopulationSoftMax_Is200()
+    {
+        Assert.Equal(200, SettlementLogic.PopulationSoftMax);
+    }
+
     // --- Settlement (raw value preservation) ---
 
     [Fact]
@@ -7842,7 +7924,7 @@ public class LogicTests
 
         // Population field (separate from Stats[0])
         Assert.True(data.HasPopulationKey);
-        Assert.Equal(200, data.Population); // Clamped from 999 to PopulationMax (200)
+        Assert.Equal(400, data.Population); // Clamped from 999 to PopulationMax (400)
         Assert.Equal(999, data.RawPopulation); // Raw preserved
     }
 
