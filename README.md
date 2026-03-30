@@ -125,7 +125,7 @@ Guides are available for [Wine][guide-wine], [Bottles][guide-bottles], [Whisky][
 ### Requirements
 
 - **Windows 10/11** (64-bit)
-- **.NET 10.0 Runtime** (included in release builds)
+> Runs on .NET 10.0 Runtime - no install required for Windows (pre-packed).
 
 ### Quick Start
 
@@ -138,6 +138,7 @@ Guides are available for [Wine][guide-wine], [Bottles][guide-bottles], [Whisky][
 
 ### Linux & macOS
 
+Wine based AppImage and DMG are available from the release page.<br>
 See the cross-platform guides for running NMSE via Wine:
 
 - 🍷 [Wine on Linux][guide-wine]
