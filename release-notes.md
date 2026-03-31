@@ -1,4 +1,4 @@
-## NMSE — No Man's Save Editor v1.0.376 (preview)
+## NMSE — No Man's Save Editor v1.0.378 (preview)
 
 > This is a preview build. Please practice safe backup practices and expect some bugs.
 
@@ -6,13 +6,27 @@
 
 #### Features:
 
-- Add import file type filter to Corvette import button for .nmsship ZIP packages from NMS Model IO Tool.
+- Starship panel now has an indicator for corvette optimisation to show if the current parts list has been optimised or not (red cross = not optimised / green tick = optimised). (Feature Request #24)
+- Importing a ship will now populate an empty slot if you have one in your roster (including .nmsship ZIP packages). (Issue/FR #26)
+- Minor tweaks to Starship panel layout.
+- Account rewards panel now lists the expedition number for season rewards and has support for both account unlock, and save file redemption for each item (allowing for per save control). (Issue/FR #25)
+- NMSE.Extractor (developer facing tool) updated to parse additional reward info.
+
 
 <br />
 
 
 <details>
 <summary>Previous Changelogs</summary>
+
+
+### Previous Changelog 1.0.376 (preview)
+
+#### Features:
+
+- Add import file type filter to Corvette import button for .nmsship ZIP packages from NMS Model IO Tool.
+
+<br />
 
 ### Previous Changelog 1.0.375 (preview)
 
