@@ -1,8 +1,25 @@
-## NMSE — No Man's Save Editor v1.0.379 (preview)
+## NMSE — No Man's Save Editor v1.0.380 (preview)
 
 > This is a preview build. Please practice safe backup practices and expect some bugs.
 
 ### Changelog
+
+#### Features:
+
+- Starship panel buttons cleaned up and converged into a less confusing set of different functions.
+- Starship panel code cleanup (internal).
+
+#### Bug Fixes:
+
+- Starship wrappers and invalidation methods improved over previous builds to stop edge-case refuse data and better align import/export.
+
+
+<br />
+
+<details>
+<summary>Previous Changelogs</summary>
+
+### Previous Changelog 1.0.379 (preview)
 
 #### Features:
 
@@ -14,11 +31,6 @@
 
 
 <br />
-
-
-<details>
-<summary>Previous Changelogs</summary>
-
 
 ### Previous Changelog 1.0.376 (preview)
 
