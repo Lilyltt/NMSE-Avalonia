@@ -34,7 +34,10 @@ public partial class StarshipPanel : UserControl
             return;
 
         string selectedType = typeItem.InternalName;
-        string filename = StarshipLogic.LookupFilenameForType(selectedType);
+
+        // For modified types, use the custom filename for label lookup;
+        // otherwise resolve from the canonical type name.
+        string filename = typeItem.CustomFilename ?? StarshipLogic.LookupFilenameForType(selectedType);
         SetStarshipMaxSupportedLabels(string.IsNullOrEmpty(filename) ? UiStrings.Get("common.unknown") : filename);
 
         // Update inventory owner type so tech filtering reflects the new ship subtype.
@@ -55,10 +58,27 @@ public partial class StarshipPanel : UserControl
 
     /// <summary>
     /// Selects the ship type combo item matching the given English ship type name.
+    /// If <paramref name="isModified"/> is true and <paramref name="customFilename"/>
+    /// is provided, adds a "(Modified)" variant to the combo box and selects it.
     /// </summary>
-    private void SelectShipTypeByName(string? englishTypeName)
+    private void SelectShipTypeByName(string? englishTypeName, bool isModified = false, string? customFilename = null)
     {
         if (string.IsNullOrEmpty(englishTypeName)) { _shipType.SelectedIndex = -1; return; }
+
+        // Remove any previously added "(Modified)" items before selecting
+        RemoveModifiedTypeItems();
+
+        if (isModified && !string.IsNullOrEmpty(customFilename))
+        {
+            // Insert a "(Modified)" variant for this type
+            string localisedBase = StarshipLogic.GetLocalisedShipTypeName(englishTypeName);
+            string modifiedDisplay = UiStrings.Format("starship.type_modified", localisedBase);
+            var modifiedItem = new StarshipLogic.ShipTypeItem(englishTypeName, modifiedDisplay, customFilename);
+            _shipType.Items.Add(modifiedItem);
+            _shipType.SelectedIndex = _shipType.Items.Count - 1;
+            return;
+        }
+
         for (int i = 0; i < _shipType.Items.Count; i++)
         {
             if (_shipType.Items[i] is StarshipLogic.ShipTypeItem item &&
@@ -69,6 +89,19 @@ public partial class StarshipPanel : UserControl
             }
         }
         _shipType.SelectedIndex = -1;
+    }
+
+    /// <summary>
+    /// Removes any "(Modified)" type items from the ship type combo box.
+    /// These are identified by having a non-null <see cref="StarshipLogic.ShipTypeItem.CustomFilename"/>.
+    /// </summary>
+    private void RemoveModifiedTypeItems()
+    {
+        for (int i = _shipType.Items.Count - 1; i >= 0; i--)
+        {
+            if (_shipType.Items[i] is StarshipLogic.ShipTypeItem item && item.CustomFilename != null)
+                _shipType.Items.RemoveAt(i);
+        }
     }
 
     private static Label AddRow(TableLayoutPanel layout, string label, Control field, int row)
@@ -115,15 +148,17 @@ public partial class StarshipPanel : UserControl
 
     /// <summary>
     /// Refreshes the ship type combo box with localised display names,
-    /// preserving the currently selected type.
+    /// preserving the currently selected type (including modified variants).
     /// </summary>
     private void RefreshShipTypeCombo()
     {
-        string? currentType = (_shipType.SelectedItem as StarshipLogic.ShipTypeItem)?.InternalName;
+        var currentItem = _shipType.SelectedItem as StarshipLogic.ShipTypeItem;
+        string? currentType = currentItem?.InternalName;
+        string? currentCustomFilename = currentItem?.CustomFilename;
         _shipType.Items.Clear();
         _shipType.Items.AddRange(StarshipLogic.GetShipTypeItems());
         if (currentType != null)
-            SelectShipTypeByName(currentType);
+            SelectShipTypeByName(currentType, currentCustomFilename != null, currentCustomFilename);
     }
 
     public void SetDatabase(GameItemDatabase? database)
@@ -207,10 +242,13 @@ public partial class StarshipPanel : UserControl
 
             var ship = ships.GetObject(idx);
 
+            var selectedTypeItem = _shipType.SelectedItem as StarshipLogic.ShipTypeItem;
+
             var values = new StarshipLogic.ShipSaveValues
             {
                 Name = _shipName.Text,
-                SelectedTypeName = (_shipType.SelectedItem as StarshipLogic.ShipTypeItem)?.InternalName,
+                SelectedTypeName = selectedTypeItem?.InternalName,
+                CustomFilename = selectedTypeItem?.CustomFilename,
                 ClassIndex = _shipClass.SelectedIndex,
                 Seed = _shipSeed.Text,
                 Damage = (double)_damageField.Value,
@@ -250,7 +288,7 @@ public partial class StarshipPanel : UserControl
             var data = StarshipLogic.LoadShipData(ship, _playerState, idx);
 
             _shipName.Text = data.Name;
-            SelectShipTypeByName(data.ShipTypeName);
+            SelectShipTypeByName(data.ShipTypeName, data.IsResourceModified, data.IsResourceModified ? data.Filename : null);
             SetStarshipMaxSupportedLabels(data.Filename);
             _shipSeed.Text = data.Seed;
             _shipClass.SelectedIndex = data.ClassIndex;

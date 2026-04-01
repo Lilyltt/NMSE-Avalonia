@@ -1370,6 +1370,7 @@
   "starship.type_hauler": "호울러",
   "starship.type_horizon_vector": "호라이즌 벡터 NX (Switch)",
   "starship.type_interceptor": "인터셉터",
+  "starship.type_modified": "{0} (수정됨)",
   "starship.type_living_ship": "리빙 쉽",
   "starship.type_sentinel": "센티넬",
   "starship.type_shuttle": "셔틀",

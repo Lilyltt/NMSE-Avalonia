@@ -662,4 +662,163 @@ public class StarshipLogicTests
         }
         return arr;
     }
+
+    // --- IsFilenameModified tests ---
+
+    [Fact]
+    public void IsFilenameModified_CanonicalFilename_ReturnsFalse()
+    {
+        Assert.False(StarshipLogic.IsFilenameModified("MODELS/COMMON/SPACECRAFT/SCIENTIFIC/SCIENTIFIC_PROC.SCENE.MBIN"));
+    }
+
+    [Fact]
+    public void IsFilenameModified_CustomFilename_ReturnsTrue()
+    {
+        Assert.True(StarshipLogic.IsFilenameModified("MODELS/COMMON/SPACECRAFT/SCIENTIFIC/CANOPY/CANOPYA/CANOPYA.SCENE.MBIN"));
+    }
+
+    [Fact]
+    public void IsFilenameModified_EmptyFilename_ReturnsFalse()
+    {
+        Assert.False(StarshipLogic.IsFilenameModified(""));
+    }
+
+    [Fact]
+    public void IsFilenameModified_NullFilename_ReturnsFalse()
+    {
+        Assert.False(StarshipLogic.IsFilenameModified(null!));
+    }
+
+    [Fact]
+    public void IsFilenameModified_AllCanonicalFilenames_ReturnFalse()
+    {
+        foreach (var key in StarshipLogic.ShipInfo.Keys)
+        {
+            Assert.False(StarshipLogic.IsFilenameModified(key),
+                $"Canonical filename '{key}' should not be detected as modified.");
+        }
+    }
+
+    // --- LoadShipData modified detection ---
+
+    [Fact]
+    public void LoadShipData_CanonicalFilename_IsResourceModifiedFalse()
+    {
+        var ship = JsonObject.Parse("""
+        {
+            "Name": "TestExplorer",
+            "Resource": {
+                "Filename": "MODELS/COMMON/SPACECRAFT/SCIENTIFIC/SCIENTIFIC_PROC.SCENE.MBIN",
+                "Seed": [true, "0x1234"]
+            },
+            "Inventory": { "Class": { "InventoryClass": "S" } }
+        }
+        """);
+        var data = StarshipLogic.LoadShipData(ship, null);
+        Assert.Equal("Explorer", data.ShipTypeName);
+        Assert.False(data.IsResourceModified);
+    }
+
+    [Fact]
+    public void LoadShipData_CustomFilename_IsResourceModifiedTrue()
+    {
+        var ship = JsonObject.Parse("""
+        {
+            "Name": "ModExplorer",
+            "Resource": {
+                "Filename": "MODELS/COMMON/SPACECRAFT/SCIENTIFIC/CANOPY/CANOPYA/CANOPYA.SCENE.MBIN",
+                "Seed": [true, "0x5678"]
+            },
+            "Inventory": { "Class": { "InventoryClass": "A" } }
+        }
+        """);
+        var data = StarshipLogic.LoadShipData(ship, null);
+        Assert.Equal("Explorer", data.ShipTypeName);
+        Assert.True(data.IsResourceModified);
+        Assert.Equal("MODELS/COMMON/SPACECRAFT/SCIENTIFIC/CANOPY/CANOPYA/CANOPYA.SCENE.MBIN", data.Filename);
+    }
+
+    // --- SaveShipData with custom filename ---
+
+    [Fact]
+    public void SaveShipData_WithCustomFilename_PreservesCustomValue()
+    {
+        var ship = JsonObject.Parse("""
+        {
+            "Name": "",
+            "Resource": {
+                "Filename": "MODELS/COMMON/SPACECRAFT/SCIENTIFIC/CANOPY/CANOPYA/CANOPYA.SCENE.MBIN",
+                "Seed": [true, "0x1234"]
+            },
+            "Inventory": { "Class": { "InventoryClass": "A" } }
+        }
+        """);
+        var playerState = JsonObject.Parse("""{ "ShipUsesLegacyColours": [false] }""");
+
+        var values = new StarshipLogic.ShipSaveValues
+        {
+            Name = "ModExplorer",
+            SelectedTypeName = "Explorer",
+            CustomFilename = "MODELS/COMMON/SPACECRAFT/SCIENTIFIC/CANOPY/CANOPYA/CANOPYA.SCENE.MBIN",
+            ClassIndex = 3,
+            Seed = "0x1234",
+            ShipIndex = 0
+        };
+
+        StarshipLogic.SaveShipData(ship, playerState, values);
+
+        var resource = ship.GetObject("Resource");
+        Assert.Equal("MODELS/COMMON/SPACECRAFT/SCIENTIFIC/CANOPY/CANOPYA/CANOPYA.SCENE.MBIN",
+            resource!.GetString("Filename"));
+    }
+
+    [Fact]
+    public void SaveShipData_WithoutCustomFilename_WritesCanonicalValue()
+    {
+        var ship = JsonObject.Parse("""
+        {
+            "Name": "",
+            "Resource": {
+                "Filename": "MODELS/COMMON/SPACECRAFT/SCIENTIFIC/CANOPY/CANOPYA/CANOPYA.SCENE.MBIN",
+                "Seed": [true, "0x1234"]
+            },
+            "Inventory": { "Class": { "InventoryClass": "A" } }
+        }
+        """);
+        var playerState = JsonObject.Parse("""{ "ShipUsesLegacyColours": [false] }""");
+
+        var values = new StarshipLogic.ShipSaveValues
+        {
+            Name = "NormalExplorer",
+            SelectedTypeName = "Explorer",
+            CustomFilename = null,
+            ClassIndex = 3,
+            Seed = "0x1234",
+            ShipIndex = 0
+        };
+
+        StarshipLogic.SaveShipData(ship, playerState, values);
+
+        var resource = ship.GetObject("Resource");
+        Assert.Equal("MODELS/COMMON/SPACECRAFT/SCIENTIFIC/SCIENTIFIC_PROC.SCENE.MBIN",
+            resource!.GetString("Filename"));
+    }
+
+    // --- ShipTypeItem with custom filename ---
+
+    [Fact]
+    public void ShipTypeItem_DefaultHasNullCustomFilename()
+    {
+        var item = new StarshipLogic.ShipTypeItem("Explorer", "Explorer");
+        Assert.Null(item.CustomFilename);
+    }
+
+    [Fact]
+    public void ShipTypeItem_ModifiedCarriesCustomFilename()
+    {
+        var item = new StarshipLogic.ShipTypeItem("Explorer", "Explorer (Modified)",
+            "MODELS/COMMON/SPACECRAFT/SCIENTIFIC/CANOPY/CANOPYA/CANOPYA.SCENE.MBIN");
+        Assert.Equal("MODELS/COMMON/SPACECRAFT/SCIENTIFIC/CANOPY/CANOPYA/CANOPYA.SCENE.MBIN", item.CustomFilename);
+        Assert.Equal("Explorer", item.InternalName);
+    }
 }

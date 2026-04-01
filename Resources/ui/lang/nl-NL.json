@@ -1370,6 +1370,7 @@
   "starship.type_hauler": "Hauler",
   "starship.type_horizon_vector": "Horizon Vector NX (Switch)",
   "starship.type_interceptor": "Interceptor",
+  "starship.type_modified": "{0} (Gewijzigd)",
   "starship.type_living_ship": "Living Ship",
   "starship.type_sentinel": "Sentinel",
   "starship.type_shuttle": "Shuttle",

@@ -139,6 +139,22 @@ internal static class StarshipLogic
         ).Key ?? "";
     }
 
+    /// <summary>
+    /// Determines whether a ship's resource filename differs from the canonical filename
+    /// for its resolved type. A modified filename indicates the user intentionally changed
+    /// the resource path outside of the normal ship type defaults.
+    /// </summary>
+    /// <param name="filename">The actual resource filename from the ship data.</param>
+    /// <returns><c>true</c> if the filename is non-empty and does not match the canonical filename for its resolved type.</returns>
+    internal static bool IsFilenameModified(string filename)
+    {
+        if (string.IsNullOrEmpty(filename)) return false;
+        // Exact match against a known canonical filename means it's not modified
+        if (ShipInfo.ContainsKey(filename)) return false;
+        // The filename matched via keywords (non-canonical path) - it's modified
+        return true;
+    }
+
 
 
     /// <summary>
@@ -186,14 +202,14 @@ internal static class StarshipLogic
                 string displayName;
                 if (string.IsNullOrEmpty(name))
                 {
-                    // No custom name — show slot, type, class: "[1] Hauler - C"
+                    // No custom name: show slot, type, class: "[1] Hauler - C"
                     string typeLabel = string.IsNullOrEmpty(shipType) ? "Ship" : shipType;
                     string clsLabel = string.IsNullOrEmpty(cls) ? "?" : cls;
                     displayName = $"[{i + 1}] {typeLabel} - {clsLabel}";
                 }
                 else
                 {
-                    // Named ship — show slot, name, class: "[5] VCF Blackbird - S"
+                    // Named ship: show slot, name, class: "[5] VCF Blackbird - S"
                     string clsLabel = string.IsNullOrEmpty(cls) ? "?" : cls;
                     displayName = $"[{i + 1}] {name} - {clsLabel}";
                 }
@@ -275,6 +291,7 @@ internal static class StarshipLogic
             Name = name,
             Filename = filename,
             ShipTypeName = shipTypeName,
+            IsResourceModified = IsFilenameModified(filename),
             Seed = seed,
             ClassIndex = classIndex,
             UseOldColours = useOldColours,
@@ -304,10 +321,22 @@ internal static class StarshipLogic
 
         if (!string.IsNullOrEmpty(values.SelectedTypeName))
         {
-            string filename = LookupFilenameForType(values.SelectedTypeName);
-            var resource = ship.GetObject("Resource");
-            if (resource != null && !string.IsNullOrEmpty(filename))
-                resource.Set("Filename", filename);
+            // When a custom (modified) filename is set, preserve it instead of
+            // overwriting with the canonical filename for the selected type.
+            // This allows imported ships with intentionally modified resource
+            // paths to retain their custom values.
+            if (!string.IsNullOrEmpty(values.CustomFilename))
+            {
+                var resource = ship.GetObject("Resource");
+                resource?.Set("Filename", values.CustomFilename);
+            }
+            else
+            {
+                string filename = LookupFilenameForType(values.SelectedTypeName);
+                var resource = ship.GetObject("Resource");
+                if (resource != null && !string.IsNullOrEmpty(filename))
+                    resource.Set("Filename", filename);
+            }
         }
 
         if (values.ClassIndex >= 0)
@@ -885,6 +914,8 @@ internal static class StarshipLogic
     /// <summary>
     /// Represents a ship type in the type selection combo box.
     /// Carries the English internal name for data lookups while displaying a localised name.
+    /// When <see cref="CustomFilename"/> is set, the item represents a ship whose resource
+    /// filename was intentionally modified from the default for that type.
     /// </summary>
     internal sealed class ShipTypeItem
     {
@@ -892,11 +923,18 @@ internal static class StarshipLogic
         public string InternalName { get; }
         /// <summary>The localised display name shown in the combo box.</summary>
         public string DisplayName { get; }
+        /// <summary>
+        /// When non-null, this item represents a ship with a modified (non-canonical)
+        /// resource filename. The value is the actual custom filename that should be
+        /// preserved on save instead of the canonical filename for the type.
+        /// </summary>
+        public string? CustomFilename { get; }
 
-        public ShipTypeItem(string internalName, string displayName)
+        public ShipTypeItem(string internalName, string displayName, string? customFilename = null)
         {
             InternalName = internalName;
             DisplayName = displayName;
+            CustomFilename = customFilename;
         }
 
         /// <inheritdoc/>
@@ -914,6 +952,11 @@ internal static class StarshipLogic
         public string Filename { get; set; } = "";
         /// <summary>The resolved ship type display name (e.g. "Fighter", "Hauler").</summary>
         public string ShipTypeName { get; set; } = "";
+        /// <summary>
+        /// Whether the ship's resource filename differs from the canonical filename
+        /// for its resolved type, indicating an intentional modification.
+        /// </summary>
+        public bool IsResourceModified { get; set; }
         /// <summary>The ship's procedural generation seed as a hex string.</summary>
         public string Seed { get; set; } = "";
         /// <summary>Index into <see cref="ShipClasses"/> for the ship's class grade.</summary>
@@ -951,6 +994,11 @@ internal static class StarshipLogic
         public string Name { get; set; } = "";
         /// <summary>The selected ship type display name, or <c>null</c> to leave unchanged.</summary>
         public string? SelectedTypeName { get; set; }
+        /// <summary>
+        /// When non-null, this is a custom (modified) resource filename that should be
+        /// preserved on save instead of looking up the canonical filename from the type name.
+        /// </summary>
+        public string? CustomFilename { get; set; }
         /// <summary>Index into <see cref="ShipClasses"/> for the desired class grade.</summary>
         public int ClassIndex { get; set; } = -1;
         /// <summary>The seed hex string to set.</summary>

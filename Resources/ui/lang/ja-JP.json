@@ -1370,6 +1370,7 @@
   "starship.type_hauler": "ホーラー",
   "starship.type_horizon_vector": "ホライゾンベクター NX (Switch)",
   "starship.type_interceptor": "インターセプター",
+  "starship.type_modified": "{0} (変更済み)",
   "starship.type_living_ship": "リビングシップ",
   "starship.type_sentinel": "センチネル",
   "starship.type_shuttle": "シャトル",
