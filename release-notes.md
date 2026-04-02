@@ -1,8 +1,19 @@
-## NMSE — No Man's Save Editor v1.0.381 (preview)
+## NMSE — No Man's Save Editor v1.0.382 (preview)
 
 > This is a preview build. Please practice safe backup practices and expect some bugs.
 
 ### Changelog
+
+#### Bug Fixes:
+
+- Small fix for corvette tech inventories visual bug, where they lost the override information from internal parts to construction part IDs when resized.
+
+<br />
+
+<details>
+<summary>Previous Changelogs</summary>
+
+### Previous Changelog 1.0.381 (preview)
 
 #### Features:
 
@@ -15,9 +26,6 @@
 
 
 <br />
-
-<details>
-<summary>Previous Changelogs</summary>
 
 ### Previous Changelog 1.0.380 (preview)
 
