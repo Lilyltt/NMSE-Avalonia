@@ -3080,6 +3080,7 @@ public partial class InventoryGridPanel : UserControl
         private readonly MarqueeLabel _nameLabel;
         private readonly Label _amountLabel;
         private readonly ToolTip _toolTip;
+        private Image? _compositeImage; // tracks composite bitmaps we create so only they are disposed
 
         [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
         public int GridX { get; }
@@ -3393,8 +3394,8 @@ public partial class InventoryGridPanel : UserControl
             bool needsComposite = (IconImage != null && ClassMiniIcon != null) || elementSymbol != null;
 
             // Dispose previous composite bitmap (if any) to avoid memory leaks.
-            // Only dispose if it's a composite we created, not the shared IconImage reference.
-            var oldImage = _iconBox.Image;
+            // Only dispose composites we created - never shared cached icons from IconManager.
+            var oldComposite = _compositeImage;
 
             if (needsComposite && IconImage != null)
             {
@@ -3447,15 +3448,17 @@ public partial class InventoryGridPanel : UserControl
                     }
                 }
                 _iconBox.Image = composite;
+                _compositeImage = composite;
             }
             else
             {
                 _iconBox.Image = IconImage;
+                _compositeImage = null;
             }
 
-            // Dispose old composite only if it was a privately-created bitmap
-            if (oldImage != null && oldImage != IconImage && oldImage != ClassMiniIcon)
-                oldImage.Dispose();
+            // Dispose old composite only - never dispose shared cached icons
+            if (oldComposite != null)
+                oldComposite.Dispose();
 
             // Display item name at top (with supercharge indicator)
             string nameText = !string.IsNullOrEmpty(DisplayName) ? DisplayName : ItemId;
@@ -3523,12 +3526,12 @@ public partial class InventoryGridPanel : UserControl
             {
                 // Do NOT dispose _toolTip - it is shared across all cells and
                 // owned by the parent InventoryGridPanel.
-                // Dispose composite bitmap if it's not a shared reference.
-                var img = _iconBox?.Image;
-                if (img != null && img != IconImage && img != ClassMiniIcon)
+                // Only dispose our composite bitmap, never shared cached icons.
+                if (_compositeImage != null)
                 {
                     _iconBox!.Image = null;
-                    img.Dispose();
+                    _compositeImage.Dispose();
+                    _compositeImage = null;
                 }
             }
             base.Dispose(disposing);
