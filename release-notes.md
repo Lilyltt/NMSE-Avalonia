@@ -1,4 +1,4 @@
-## NMSE — No Man's Save Editor v1.0.383 (preview)
+## NMSE — No Man's Save Editor v1.0.384 (preview)
 
 > This is a preview build. Please practice safe backup practices and expect some bugs.
 
@@ -6,12 +6,20 @@
 
 #### Bug Fixes:
 
-- Critical fix for corvette import edge cases where import could fall back to Seed<->TS lookup and collide base data, causing the import to steal another corvettes base data, invalidating the other corvette in the process.
+- Small fix for edge case crashes in icon loading for the inventory grid resulting in a broken image instead of the item icon.
 
 <br />
 
 <details>
 <summary>Previous Changelogs</summary>
+
+### Previous Changelog 1.0.383 (preview)
+
+#### Bug Fixes:
+
+- Critical fix for corvette import edge cases where import could fall back to Seed<->TS lookup and collide base data, causing the import to steal another corvettes base data, invalidating the other corvette in the process.
+
+<br />
 
 ### Previous Changelog 1.0.382 (preview)
 
