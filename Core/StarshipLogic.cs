@@ -652,8 +652,8 @@ internal static class StarshipLogic
     // Per ship type:
     //   Normal ships   -> [Ship, AllShips, AllShipsExceptAlien]
     //   Living Ship    -> [AlienShip, AllShips]
-    //   Robot/Sentinel -> [RobotShip, AllShips, AllShipsExceptAlien]
-    //   Corvette       -> [Corvette, AllShips, AllShipsExceptAlien]
+    //   Robot/Sentinel -> [RobotShip, Ship, AllShips, AllShipsExceptAlien]
+    //   Corvette       -> [Corvette, Ship, AllShips, AllShipsExceptAlien]
     /// <summary>
     /// Maps a ship type display name to the Technology Category owner type
     /// used for inventory tech filtering. This determines which technology items

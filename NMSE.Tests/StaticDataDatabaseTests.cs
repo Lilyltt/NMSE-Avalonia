@@ -1578,17 +1578,17 @@ public class StaticDataDatabaseTests
     [InlineData("AlienShip", "AllShipsExceptAlien", false)]
     [InlineData("AlienShip", "Ship", false)]
     [InlineData("AlienShip", "RobotShip", false)]
-    // RobotShip (Sentinel): RobotShip, AllShips, AllShipsExceptAlien
+    // RobotShip (Sentinel): RobotShip, Ship, AllShips, AllShipsExceptAlien
     [InlineData("RobotShip", "RobotShip", true)]
+    [InlineData("RobotShip", "Ship", true)]
     [InlineData("RobotShip", "AllShips", true)]
     [InlineData("RobotShip", "AllShipsExceptAlien", true)]
     [InlineData("RobotShip", "AlienShip", false)]
-    [InlineData("RobotShip", "Ship", false)]
-    // Corvette: Corvette, AllShips, AllShipsExceptAlien
+    // Corvette: Corvette, Ship, AllShips, AllShipsExceptAlien
     [InlineData("Corvette", "Corvette", true)]
+    [InlineData("Corvette", "Ship", true)]
     [InlineData("Corvette", "AllShips", true)]
     [InlineData("Corvette", "AllShipsExceptAlien", true)]
-    [InlineData("Corvette", "Ship", false)]
     [InlineData("Corvette", "AlienShip", false)]
     // Weapon: only Weapon
     [InlineData("Weapon", "Weapon", true)]
