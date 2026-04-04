@@ -3638,9 +3638,9 @@ public class LogicTests
     [Fact]
     public void GalaxyDatabase_GetGalaxyName_HandlesOutOfRange()
     {
-        // All 256 galaxies are now in the database; out of range returns Unknown
+        // All 257 galaxies are now in the database; out of range returns Unknown
         Assert.Equal("Drundemiso", GalaxyDatabase.GetGalaxyName(199));
-        Assert.Equal("Unknown", GalaxyDatabase.GetGalaxyName(256));
+        Assert.Equal("Unknown", GalaxyDatabase.GetGalaxyName(257));
         Assert.Equal("Unknown", GalaxyDatabase.GetGalaxyName(-1));
     }
 
@@ -3703,9 +3703,9 @@ public class LogicTests
     }
 
     [Fact]
-    public void GalaxyDatabase_Has256Galaxies()
+    public void GalaxyDatabase_Has257Galaxies()
     {
-        Assert.Equal(256, GalaxyDatabase.Galaxies.Length);
+        Assert.Equal(257, GalaxyDatabase.Galaxies.Length);
     }
 
     [Fact]
