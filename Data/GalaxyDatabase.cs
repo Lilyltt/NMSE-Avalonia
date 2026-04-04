@@ -261,7 +261,8 @@ public static class GalaxyDatabase
         ("Uliciawai", "Normal", 253),
         ("Tuhgrespod", "Normal", 254),
         ("Iousongola", "Harsh", 255),
-        ("Amedarir", "Normal", 256),
+        ("Odyalutai", "Normal", 256),
+        ("Yilsrussimil", "Normal", 257),
     };
 
     /// <summary>Get raw galaxy name by 0-based reality index.</summary>
