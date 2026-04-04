@@ -236,7 +236,7 @@ public class DataLayerTests
     [Theory]
     [InlineData(0, "Euclid (1)")]
     [InlineData(9, "Eissentam (10)")]
-    [InlineData(255, "Amedarir (256)")]
+    [InlineData(255, "Odyalutai (256)")]
     public void GalaxyDatabase_GetGalaxyDisplayName_ReturnsNameWithNumber(int index, string expected)
     {
         Assert.Equal(expected, GalaxyDatabase.GetGalaxyDisplayName(index));
@@ -246,7 +246,7 @@ public class DataLayerTests
     public void GalaxyDatabase_GetGalaxyDisplayName_OutOfRange_ReturnsUnknown()
     {
         Assert.Equal("Unknown", GalaxyDatabase.GetGalaxyDisplayName(-1));
-        Assert.Equal("Unknown", GalaxyDatabase.GetGalaxyDisplayName(256));
+        Assert.Equal("Unknown", GalaxyDatabase.GetGalaxyDisplayName(257));
     }
 
     [Fact]
