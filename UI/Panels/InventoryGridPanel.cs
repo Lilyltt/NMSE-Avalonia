@@ -621,9 +621,9 @@ public partial class InventoryGridPanel : UserControl
         }
         else if (invTypeForDefaults == "Technology")
         {
-            // Technology items:
-            //   Non-chargeable: Amount = -1, MaxAmount = 1
-            //   Chargeable: Amount = MaxAmount = ChargeValue
+            // Technology items use ChargeAmount for MaxAmount.
+            //   Chargeable tech: Amount = ChargeValue, MaxAmount = ChargeValue
+            //   Non-chargeable tech: Amount = 1, MaxAmount = 0
             if (selectedItem.IsChargeable && selectedItem.ChargeValue > 0)
             {
                 _detailAmount.Value = selectedItem.ChargeValue;
@@ -631,9 +631,8 @@ public partial class InventoryGridPanel : UserControl
             }
             else
             {
-                _detailAmount.Minimum = -1;
-                _detailAmount.Value = -1;
-                _detailMaxAmount.Value = 1;
+                _detailAmount.Value = 1;
+                _detailMaxAmount.Value = 0;
             }
         }
         else
@@ -1661,7 +1660,7 @@ public partial class InventoryGridPanel : UserControl
         {
             var (gameItem, _, _) = ResolveGameItem(itemId);
             if (gameItem != null)
-                invType = ResolveSaveInventoryType(gameItem.ItemType);
+                invType = ResolveInventoryTypeForItem(gameItem);
         }
 
         // Build a new slot JSON object for the target position
@@ -1815,7 +1814,7 @@ public partial class InventoryGridPanel : UserControl
         }
 
         // Always show actual values and keep controls enabled so the user can freely edit them.
-        _detailAmount.Value = Math.Clamp(cell.Amount < 0 ? 1 : cell.Amount, (int)_detailAmount.Minimum, (int)_detailAmount.Maximum);
+        _detailAmount.Value = Math.Clamp(cell.Amount, (int)_detailAmount.Minimum, (int)_detailAmount.Maximum);
         _detailMaxAmount.Value = Math.Clamp(cell.MaxAmount, (int)_detailMaxAmount.Minimum, (int)_detailMaxAmount.Maximum);
         _detailAmount.Enabled = true;
         _detailMaxAmount.Enabled = true;
@@ -1885,9 +1884,9 @@ public partial class InventoryGridPanel : UserControl
             invType = "Technology";
         }
 
-        // Technology items:
-        //   Non-chargeable: Amount = -1, MaxAmount = 1
-        //   Chargeable: Amount = MaxAmount = ChargeValue
+        // Technology items use ChargeAmount for MaxAmount.
+        //   Chargeable tech: Amount = ChargeValue, MaxAmount = ChargeValue (if user left at 0)
+        //   Non-chargeable tech: Amount = 1, MaxAmount = 0
         if (invType == "Technology")
         {
             if (gameItem != null && gameItem.IsChargeable && gameItem.ChargeValue > 0)
@@ -1897,8 +1896,8 @@ public partial class InventoryGridPanel : UserControl
             }
             else
             {
-                amount = -1;
-                maxAmount = 1;
+                if (amount <= 0) amount = 1;
+                if (maxAmount <= 0) maxAmount = 0;
             }
         }
         else
@@ -2087,9 +2086,9 @@ public partial class InventoryGridPanel : UserControl
             invType = "Technology";
         }
 
-        // Technology items:
-        //   Non-chargeable: Amount = -1, MaxAmount = 1
-        //   Chargeable: Amount = MaxAmount = ChargeValue
+        // Technology items use ChargeAmount for MaxAmount.
+        //   Chargeable tech: Amount = ChargeValue, MaxAmount = ChargeValue (if user left at 0)
+        //   Non-chargeable tech: Amount = 1, MaxAmount = 0
         if (invType == "Technology")
         {
             if (gameItem != null && gameItem.IsChargeable && gameItem.ChargeValue > 0)
@@ -2099,8 +2098,8 @@ public partial class InventoryGridPanel : UserControl
             }
             else
             {
-                amount = -1;
-                maxAmount = 1;
+                if (amount <= 0) amount = 1;
+                if (maxAmount <= 0) maxAmount = 0;
             }
         }
         else
@@ -2577,7 +2576,7 @@ public partial class InventoryGridPanel : UserControl
             var (gameItem, _, _) = ResolveGameItem(itemId);
             if (gameItem != null)
             {
-                invType = ResolveSaveInventoryType(gameItem.ItemType);
+                invType = ResolveInventoryTypeForItem(gameItem);
             }
         }
 

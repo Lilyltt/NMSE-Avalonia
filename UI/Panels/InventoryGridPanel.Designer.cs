@@ -184,7 +184,7 @@ partial class InventoryGridPanel
         row++;
 
         // Amount
-        _detailAmount = new NumericUpDown { Dock = DockStyle.Fill, Minimum = 0, Maximum = int.MaxValue };
+        _detailAmount = new NumericUpDown { Dock = DockStyle.Fill, Minimum = -1, Maximum = int.MaxValue };
         _detailAmountLabel = CreateLabel("Amount:");
         detailLayout.Controls.Add(_detailAmountLabel, 0, row);
         detailLayout.Controls.Add(_detailAmount, 1, row);
