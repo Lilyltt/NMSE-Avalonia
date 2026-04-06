@@ -33,7 +33,7 @@ public class StaticDataDatabaseTests
             if (jsonDir == null) return;
 
             FrigateTraitDatabase.LoadFromFile(Path.Combine(jsonDir, "FrigateTraits.json"));
-            SettlementPerkDatabase.LoadFromFile(Path.Combine(jsonDir, "SettlementPerks.json"));
+            SettlementDatabase.LoadFromFile(Path.Combine(jsonDir, "SettlementPerks.json"));
             WikiGuideDatabase.LoadFromFile(Path.Combine(jsonDir, "WikiGuide.json"));
             TitleDatabase.LoadFromFile(Path.Combine(jsonDir, "Titles.json"));
 
@@ -507,40 +507,40 @@ public class StaticDataDatabaseTests
         Assert.Equal(expected, GameItemDatabase.IsPickerExcluded(id));
     }
 
-    // --- SettlementPerkDatabase ---
+    // --- SettlementDatabase ---
 
     [Fact]
-    public void SettlementPerkDatabase_HasExpectedPerkCount()
+    public void SettlementDatabase_HasExpectedPerkCount()
     {
-        Assert.Equal(90, SettlementPerkDatabase.Perks.Count);
+        Assert.Equal(90, SettlementDatabase.Perks.Count);
     }
 
     [Fact]
-    public void SettlementPerkDatabase_ById_ContainsAllPerks()
+    public void SettlementDatabase_ById_ContainsAllPerks()
     {
-        Assert.Equal(SettlementPerkDatabase.Perks.Count, SettlementPerkDatabase.ById.Count);
+        Assert.Equal(SettlementDatabase.Perks.Count, SettlementDatabase.ById.Count);
     }
 
     [Fact]
-    public void SettlementPerkDatabase_CanLookupKnownPerk()
+    public void SettlementDatabase_CanLookupKnownPerk()
     {
-        Assert.True(SettlementPerkDatabase.ById.ContainsKey("^STARTING_NEG1"));
-        var perk = SettlementPerkDatabase.ById["^STARTING_NEG1"];
+        Assert.True(SettlementDatabase.ById.ContainsKey("^STARTING_NEG1"));
+        var perk = SettlementDatabase.ById["^STARTING_NEG1"];
         Assert.Equal("Worm infestation", perk.Name);
         Assert.Equal("Increases maintenance costs", perk.Description);
         Assert.False(perk.Beneficial);
         Assert.False(perk.Procedural);
         Assert.True(perk.Starter);
         // Additional known perks
-        Assert.True(SettlementPerkDatabase.ById.ContainsKey("^STARTING_POS1"));
-        Assert.True(SettlementPerkDatabase.ById.ContainsKey("^SENT_RELEASED"));
+        Assert.True(SettlementDatabase.ById.ContainsKey("^STARTING_POS1"));
+        Assert.True(SettlementDatabase.ById.ContainsKey("^SENT_RELEASED"));
     }
 
     [Fact]
-    public void SettlementPerkDatabase_ProceduralPerk_HasCorrectAttributes()
+    public void SettlementDatabase_ProceduralPerk_HasCorrectAttributes()
     {
-        Assert.True(SettlementPerkDatabase.ById.ContainsKey("^BLESS_POS"));
-        var perk = SettlementPerkDatabase.ById["^BLESS_POS"];
+        Assert.True(SettlementDatabase.ById.ContainsKey("^BLESS_POS"));
+        var perk = SettlementDatabase.ById["^BLESS_POS"];
         Assert.True(perk.Procedural);
         Assert.True(perk.Beneficial);
         Assert.False(perk.Starter);
@@ -1578,17 +1578,17 @@ public class StaticDataDatabaseTests
     [InlineData("AlienShip", "AllShipsExceptAlien", false)]
     [InlineData("AlienShip", "Ship", false)]
     [InlineData("AlienShip", "RobotShip", false)]
-    // RobotShip (Sentinel): RobotShip, AllShips, AllShipsExceptAlien
+    // RobotShip (Sentinel): RobotShip, Ship, AllShips, AllShipsExceptAlien
     [InlineData("RobotShip", "RobotShip", true)]
+    [InlineData("RobotShip", "Ship", true)]
     [InlineData("RobotShip", "AllShips", true)]
     [InlineData("RobotShip", "AllShipsExceptAlien", true)]
     [InlineData("RobotShip", "AlienShip", false)]
-    [InlineData("RobotShip", "Ship", false)]
-    // Corvette: Corvette, AllShips, AllShipsExceptAlien
+    // Corvette: Corvette, Ship, AllShips, AllShipsExceptAlien
     [InlineData("Corvette", "Corvette", true)]
+    [InlineData("Corvette", "Ship", true)]
     [InlineData("Corvette", "AllShips", true)]
     [InlineData("Corvette", "AllShipsExceptAlien", true)]
-    [InlineData("Corvette", "Ship", false)]
     [InlineData("Corvette", "AlienShip", false)]
     // Weapon: only Weapon
     [InlineData("Weapon", "Weapon", true)]
@@ -1919,7 +1919,7 @@ public class StaticDataDatabaseTests
         Assert.NotNull(item);
         Assert.True(item!.IsCraftable, "CASING (Metal Plating) should be craftable");
         Assert.False(item.IsProcedural, "CASING should not be procedural");
-        Assert.True(Core.DiscoveryLogic.IsLearnableProduct(item),
+        Assert.True(Core.CatalogueLogic.IsLearnableProduct(item),
             "CASING should be learnable (craftable + non-procedural)");
     }
 
@@ -1935,7 +1935,7 @@ public class StaticDataDatabaseTests
         var item = db.GetItem("MAINT_FUEL1");
         Assert.NotNull(item);
         Assert.Equal("Maintenance", item!.Category);
-        Assert.False(Core.DiscoveryLogic.IsLearnableTechnology(item),
+        Assert.False(Core.CatalogueLogic.IsLearnableTechnology(item),
             "Maintenance tech should not be learnable");
     }
 
@@ -2011,7 +2011,7 @@ public class StaticDataDatabaseTests
         Assert.NotEmpty(specialShopItems);
         foreach (var item in specialShopItems)
         {
-            Assert.True(Core.DiscoveryLogic.IsLearnableProduct(item),
+            Assert.True(Core.CatalogueLogic.IsLearnableProduct(item),
                 $"SpecialShop item {item.Id} ({item.Name}) should be learnable");
         }
     }

@@ -51,7 +51,7 @@ public class DatabaseLocalisationTests
     }
 
     [Fact]
-    public void SettlementPerkDatabase_LoadFromFile_WithLocStr_EnablesLocalisation()
+    public void SettlementDatabase_LoadFromFile_WithLocStr_EnablesLocalisation()
     {
         string tmpDir = Path.Combine(Path.GetTempPath(), "nmse_loc_test_" + Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(tmpDir);
@@ -66,23 +66,23 @@ public class DatabaseLocalisationTests
             File.WriteAllText(Path.Combine(tmpDir, "ja-JP.json"),
                 """{"UI_PERK_TEST": "ワーム蔓延", "UI_PERK_TEST_DESC": "メンテナンスコストが増加"}""");
 
-            SettlementPerkDatabase.LoadFromFile(Path.Combine(tmpDir, "SettlementPerks.json"));
-            Assert.Single(SettlementPerkDatabase.Perks);
-            Assert.False(SettlementPerkDatabase.Perks[0].Beneficial);
-            Assert.Single(SettlementPerkDatabase.Perks[0].StatChanges);
-            Assert.Equal(PerkStatType.Upkeep, SettlementPerkDatabase.Perks[0].StatChanges[0].Type);
+            SettlementDatabase.LoadFromFile(Path.Combine(tmpDir, "SettlementPerks.json"));
+            Assert.Single(SettlementDatabase.Perks);
+            Assert.False(SettlementDatabase.Perks[0].Beneficial);
+            Assert.Single(SettlementDatabase.Perks[0].StatChanges);
+            Assert.Equal(PerkStatType.Upkeep, SettlementDatabase.Perks[0].StatChanges[0].Type);
 
             var svc = new LocalisationService();
             svc.SetLangDirectory(tmpDir);
             svc.LoadLanguage("ja-JP");
 
-            int count = SettlementPerkDatabase.ApplyLocalisation(svc);
+            int count = SettlementDatabase.ApplyLocalisation(svc);
             Assert.Equal(1, count);
-            Assert.Equal("ワーム蔓延", SettlementPerkDatabase.Perks[0].Name);
-            Assert.Equal("メンテナンスコストが増加", SettlementPerkDatabase.Perks[0].Description);
+            Assert.Equal("ワーム蔓延", SettlementDatabase.Perks[0].Name);
+            Assert.Equal("メンテナンスコストが増加", SettlementDatabase.Perks[0].Description);
 
-            SettlementPerkDatabase.RevertLocalisation();
-            Assert.Equal("Worm infestation", SettlementPerkDatabase.Perks[0].Name);
+            SettlementDatabase.RevertLocalisation();
+            Assert.Equal("Worm infestation", SettlementDatabase.Perks[0].Name);
         }
         finally
         {

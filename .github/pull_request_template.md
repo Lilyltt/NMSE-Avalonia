@@ -6,7 +6,7 @@ What does this PR do? (Short description)
 
 ## ✅ Checklist
 
-- [ ] I have read the **Contributor Guidelines** in `CONTRIBUTING.md`
+- [ ] I have read the **Contributor Guidelines** in [`CONTRIBUTING.md`](https://github.com/vectorcmdr/NMSE/blob/main/.github/CONTRIBUTING.md)
 - [ ] My changes follow the project style and conventions
 - [ ] I have not introduced external packages or libraries
 - [ ] I have added localisation to UI strings

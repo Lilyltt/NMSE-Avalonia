@@ -1,6 +1,7 @@
 using NMSE.Models;
 using System.Buffers;
 using System.IO.Compression;
+using System.Linq;
 using System.Text;
 
 namespace NMSE.IO;
@@ -101,8 +102,20 @@ public class SaveFileManager
         if (Directory.Exists(xboxPath))
         {
             var nmsDirs = Directory.GetDirectories(xboxPath, "HelloGames*");
-            if (nmsDirs.Length > 0)
-                return nmsDirs[0];
+            foreach (var nmsDir in nmsDirs)
+            {
+                // Xbox Game Pass saves live under SystemAppData/wgs/{SaveId}/ which
+                // contains the containers.index file.
+                string wgsPath = Path.Combine(nmsDir, "SystemAppData", "wgs");
+                if (Directory.Exists(wgsPath))
+                {
+                    foreach (var saveIdDir in Directory.GetDirectories(wgsPath))
+                    {
+                        if (File.Exists(Path.Combine(saveIdDir, "containers.index")))
+                            return saveIdDir;
+                    }
+                }
+            }
         }
 
         // macOS: ~/Library/Application Support/HelloGames/NMS
@@ -319,6 +332,124 @@ public class SaveFileManager
     }
 
     /// <summary>
+    /// Save JSON data back to an Xbox Game Pass save slot.
+    /// Writes the compressed save data and meta to the blob directory,
+    /// then updates the containers.index file.
+    /// </summary>
+    /// <param name="containersIndexPath">Path to the containers.index file.</param>
+    /// <param name="slotIdentifier">Slot identifier (e.g., "Slot1Auto").</param>
+    /// <param name="data">The JSON save data to write.</param>
+    public static void SaveXboxSave(string containersIndexPath, string slotIdentifier, JsonObject data)
+    {
+        // Parse the full containers.index to get header info and all slots
+        var indexData = ContainersIndexManager.ParseContainersIndexFull(containersIndexPath);
+        if (!indexData.Slots.TryGetValue(slotIdentifier, out var slotInfo))
+            throw new InvalidOperationException($"Xbox slot '{slotIdentifier}' not found in containers.index");
+
+        // Serialize JSON to bytes with null terminator
+        string json = data.ToString();
+        byte[] jsonBytes = Latin1.GetBytes(json);
+        byte[] dataBytes = new byte[jsonBytes.Length + 1];
+        Buffer.BlockCopy(jsonBytes, 0, dataBytes, 0, jsonBytes.Length);
+
+        // Compress save data using NMS LZ4 streaming format
+        byte[] compressedData;
+        using (var ms = new MemoryStream())
+        using (var compressor = new Lz4CompressorStream(ms))
+        {
+            compressor.Write(dataBytes, 0, dataBytes.Length);
+            compressor.Flush();
+            compressedData = ms.ToArray();
+        }
+
+        // Read existing meta or create minimal placeholder
+        byte[] metaData = ContainersIndexManager.LoadXboxMeta(slotInfo) ?? new byte[24];
+
+        // Write save data blob, meta blob, and blob container
+        ContainersIndexManager.WriteXboxSave(slotInfo, compressedData, metaData);
+
+        // Update the slot's last modified time
+        slotInfo.LastModified = DateTimeOffset.UtcNow;
+
+        // Rewrite the containers.index file with all slots
+        ContainersIndexManager.WriteContainersIndex(
+            containersIndexPath,
+            indexData.Slots.Values,
+            indexData.ProcessIdentifier,
+            indexData.AccountGuid,
+            DateTimeOffset.UtcNow);
+    }
+
+    /// <summary>
+    /// Save account data back to the Xbox Game Pass AccountData blob.
+    /// Uses raw LZ4 block compression (not NMS streaming), matching the format
+    /// the game uses for AccountData and Settings blobs.
+    /// </summary>
+    /// <param name="containersIndexPath">Path to the containers.index file.</param>
+    /// <param name="accountData">The account data JSON object to write.</param>
+    public static void SaveXboxAccountData(string containersIndexPath, JsonObject accountData)
+    {
+        // Parse the full containers.index to get header info and all slots
+        var indexData = ContainersIndexManager.ParseContainersIndexFull(containersIndexPath);
+        if (!indexData.Slots.TryGetValue(ContainersIndexManager.AccountDataIdentifier, out var accountSlot))
+            throw new InvalidOperationException("Xbox AccountData slot not found in containers.index");
+
+        // Serialize JSON to bytes with null terminator
+        string json = accountData.ToString();
+        byte[] jsonBytes = Latin1.GetBytes(json);
+        byte[] dataBytes = new byte[jsonBytes.Length + 1];
+        Buffer.BlockCopy(jsonBytes, 0, dataBytes, 0, jsonBytes.Length);
+
+        // Compress account data using raw LZ4 block compression.
+        // AccountData/Settings use raw LZ4, not NMS streaming (0xE5A1EDFE).
+        byte[] compressedBuffer = new byte[Lz4Compressor.MaxCompressedLength(dataBytes.Length)];
+        int compressedLen = Lz4Compressor.Compress(dataBytes, 0, dataBytes.Length,
+            compressedBuffer, 0, compressedBuffer.Length);
+        byte[] compressedData = new byte[compressedLen];
+        Buffer.BlockCopy(compressedBuffer, 0, compressedData, 0, compressedLen);
+
+        // Read existing meta or create minimal account meta placeholder.
+        // Account meta is 20 bytes: version(4) + padding(12) + decompressedSize(4)
+        byte[] metaData = ContainersIndexManager.LoadXboxMeta(accountSlot) ?? CreateAccountMeta((uint)dataBytes.Length);
+
+        // Update the decompressed size in the meta if we have existing meta
+        if (metaData.Length >= 20)
+        {
+            byte[] sizeBytes = BitConverter.GetBytes((uint)dataBytes.Length);
+            Buffer.BlockCopy(sizeBytes, 0, metaData, 16, 4);
+        }
+
+        // Write account data blob, meta blob, and blob container
+        ContainersIndexManager.WriteXboxSave(accountSlot, compressedData, metaData);
+
+        // Update the slot's last modified time
+        accountSlot.LastModified = DateTimeOffset.UtcNow;
+
+        // Rewrite the containers.index file with all slots
+        ContainersIndexManager.WriteContainersIndex(
+            containersIndexPath,
+            indexData.Slots.Values,
+            indexData.ProcessIdentifier,
+            indexData.AccountGuid,
+            DateTimeOffset.UtcNow);
+    }
+
+    /// <summary>
+    /// Creates a minimal Xbox account meta blob (20 bytes).
+    /// Format: version(4, always 1) + padding(12, zeros) + decompressedSize(4).
+    /// </summary>
+    private static byte[] CreateAccountMeta(uint decompressedSize)
+    {
+        byte[] meta = new byte[20];
+        // Version = 1
+        meta[0] = 1;
+        // Decompressed size at offset 16
+        byte[] sizeBytes = BitConverter.GetBytes(decompressedSize);
+        Buffer.BlockCopy(sizeBytes, 0, meta, 16, 4);
+        return meta;
+    }
+
+    /// <summary>
     /// Load a save from an Xbox Game Pass containers.index directory.
     /// </summary>
     /// <param name="containersIndexPath">Path to the containers.index file.</param>
@@ -392,6 +523,48 @@ public class SaveFileManager
         if (data.Length < 4) return false;
         return data[0] == Lz4Magic[0] && data[1] == Lz4Magic[1] &&
                data[2] == Lz4Magic[2] && data[3] == Lz4Magic[3];
+    }
+
+    /// <summary>
+    /// HGSAVEV2 header: "HGSAVEV2\0" (9 bytes), used by post-Omega Xbox/Microsoft saves.
+    /// </summary>
+    private static readonly byte[] Hgsv2Header = new byte[] { 0x48, 0x47, 0x53, 0x41, 0x56, 0x45, 0x56, 0x32, 0x00 }; // "HGSAVEV2\0"
+
+    private static bool IsHgsv2Header(byte[] data, int length)
+    {
+        if (length < Hgsv2Header.Length) return false;
+        for (int i = 0; i < Hgsv2Header.Length; i++)
+            if (data[i] != Hgsv2Header[i]) return false;
+        return true;
+    }
+
+    /// <summary>
+    /// Decompress the first HGSAVEV2 frame to get a text prefix for fast scanning.
+    /// HGSAVEV2 format: 9-byte header, then frames of [decompressedSize(4)] [compressedSize(4)] [LZ4 data].
+    /// </summary>
+    private static string? DecompressHgsv2FirstFrame(FileStream fs)
+    {
+        fs.Position = Hgsv2Header.Length;
+        byte[] frameHeader = new byte[8];
+        if (fs.Read(frameHeader, 0, 8) < 8) return null;
+
+        int decompressedLen = frameHeader[0] | (frameHeader[1] << 8) | (frameHeader[2] << 16) | (frameHeader[3] << 24);
+        int compressedLen = frameHeader[4] | (frameHeader[5] << 8) | (frameHeader[6] << 16) | (frameHeader[7] << 24);
+        if (decompressedLen <= 0 || compressedLen <= 0) return null;
+        if (decompressedLen > 256 * 1024 * 1024 || compressedLen > 256 * 1024 * 1024) return null;
+
+        byte[] block = new byte[compressedLen];
+        int totalRead = 0;
+        while (totalRead < compressedLen)
+        {
+            int n = fs.Read(block, totalRead, compressedLen - totalRead);
+            if (n <= 0) break;
+            totalRead += n;
+        }
+
+        byte[] decompressed = new byte[decompressedLen];
+        int written = Lz4Compressor.Decompress(block, 0, totalRead, decompressed, 0, decompressedLen);
+        return Latin1.GetString(decompressed, 0, written);
     }
 
     /// <summary>
@@ -632,9 +805,15 @@ public class SaveFileManager
                 }
                 text = Latin1.GetString(decompressed, 0, read);
             }
+            else if (IsHgsv2Header(header, 16))
+            {
+                // HGSAVEV2 format (post-Omega Xbox): decompress first frame
+                text = DecompressHgsv2FirstFrame(fs) ?? "";
+                if (string.IsNullOrEmpty(text)) return 0;
+            }
             else if (IsNomanSkyHeader(header))
             {
-                // PS4/PS5 NOMANSKY header — JSON starts at 0x70
+                // PS4/PS5 NOMANSKY header. JSON starts at offset 0x70
                 fs.Position = 0x70;
                 int limit = (int)Math.Min(fs.Length - fs.Position, 64 * 1024);
                 byte[] prefix = new byte[limit];
@@ -736,9 +915,15 @@ public class SaveFileManager
                 }
                 text = Encoding.UTF8.GetString(decompressed, 0, read);
             }
+            else if (IsHgsv2Header(header, 16))
+            {
+                // HGSAVEV2 format (post-Omega Xbox): decompress first frame
+                text = DecompressHgsv2FirstFrame(fs) ?? "";
+                if (string.IsNullOrEmpty(text)) return "";
+            }
             else if (IsNomanSkyHeader(header))
             {
-                // PS4/PS5 NOMANSKY header — JSON starts at 0x70
+                // PS4/PS5 NOMANSKY header. JSON starts at offset 0x70
                 fs.Position = 0x70;
                 int limit = (int)Math.Min(fs.Length - fs.Position, 64 * 1024);
                 byte[] prefix = new byte[limit];

@@ -1,6 +1,9 @@
 <div align="center">
 
-> Preview builds are now live! 🎉
+> Preview builds are now live! 🎉 <br>
+> Expect some bugs while in preview.
+
+> The user guide may lag behind builds during preview.
 
 # NMSE (No Man's Save Editor)
 
@@ -81,7 +84,10 @@ NMSE is localised in **16 languages**: English (UK), English (US), French, Itali
 
 ### 🐧 Cross-Platform (via Wine)
 
-While NMSE is a native Windows application, it runs on **Linux** and **macOS** via Wine compatibility layers. Guides are available for [Wine][guide-wine], [Bottles][guide-bottles], [Whisky][guide-whisky], and [CrossOver][guide-crossover]. A native cross-platform version [is planned][cross-platfom-plan].
+While NMSE is a native Windows application, it runs on **Linux** and **macOS** via Wine compatibility layers. <br>
+An AppImage is available for Linux users from the releases page.
+
+Guides are available for [Wine][guide-wine], [Bottles][guide-bottles], [Whisky][guide-whisky], and [CrossOver][guide-crossover]. A native cross-platform version [is planned][cross-platfom-plan].
 
 ---
 
@@ -102,7 +108,7 @@ While NMSE is a native Windows application, it runs on **Linux** and **macOS** v
   </tr>
   <tr>
     <th style="width: 25%; text-align: center; padding: 8px;">Fleet</th>
-    <th style="width: 25%; text-align: center; padding: 8px;">Discoveries</th>
+    <th style="width: 25%; text-align: center; padding: 8px;">Catalogue</th>
     <th style="width: 25%; text-align: center; padding: 8px;">JSON Editor</th>
     <th style="width: 25%; text-align: center; padding: 8px;">Localisation</th>
   </tr>
@@ -121,7 +127,7 @@ While NMSE is a native Windows application, it runs on **Linux** and **macOS** v
 ### Requirements
 
 - **Windows 10/11** (64-bit)
-- **.NET 10.0 Runtime** (included in release builds)
+> Runs on .NET 10.0 Runtime - no install required for Windows (pre-packed).
 
 ### Quick Start
 
@@ -134,6 +140,7 @@ While NMSE is a native Windows application, it runs on **Linux** and **macOS** v
 
 ### Linux & macOS
 
+Wine based AppImage and DMG are available from the release page.<br>
 See the cross-platform guides for running NMSE via Wine:
 
 - 🍷 [Wine on Linux][guide-wine]
@@ -180,12 +187,13 @@ dotnet test NMSE.Extractor.Tests/
 - [x] Full save file support (Steam, GOG, Xbox, PS4, Switch)
 - [x] 16-language UI localisation
 - [x] Wine compatibility scripts (Linux & macOS)
+- [X] Corvette build order optimizer
+- [X] Import support for NMS Model IO Tool
 - [ ] Native cross-platform UI (AvaloniaUI migration)
 - [ ] Base teleport reordering
 - [ ] Support for in-game archives
 - [ ] Starship/Multi-tool/etc. collection system
 - [ ] Community seeds library
-- [ ] Corvette build order optimizer
 - [ ] Integrations with NMS Optimizer app
 
 ---
@@ -212,11 +220,17 @@ NMSE is licensed under the **GNU General Public License v3.0** - see the [LICENS
 
 ---
 
-## 🙏 Acknowledgements
+## 🤝 Acknowledgements
 
 - **[Hello Games][hello-games]** for creating No Man's Sky
 - The NMS modding and save editing community
 - All [contributors][contributors] and [sponsors][sponsor] who help make NMSE better
+
+### Contributors:
+
+<a href="https://github.com/vectorcmdr/NMSE/graphs/contributors">
+  <img src="https://contrib.rocks/image?repo=vectorcmdr/NMSE" />
+</a>
 
 ---
 

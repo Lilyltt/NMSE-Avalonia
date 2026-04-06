@@ -1,3 +1,4 @@
+using System.IO.Compression;
 using NMSE.Data;
 using NMSE.Models;
 
@@ -138,6 +139,22 @@ internal static class StarshipLogic
         ).Key ?? "";
     }
 
+    /// <summary>
+    /// Determines whether a ship's resource filename differs from the canonical filename
+    /// for its resolved type. A modified filename indicates the user intentionally changed
+    /// the resource path outside of the normal ship type defaults.
+    /// </summary>
+    /// <param name="filename">The actual resource filename from the ship data.</param>
+    /// <returns><c>true</c> if the filename is non-empty and does not match the canonical filename for its resolved type.</returns>
+    internal static bool IsFilenameModified(string filename)
+    {
+        if (string.IsNullOrEmpty(filename)) return false;
+        // Exact match against a known canonical filename means it's not modified
+        if (ShipInfo.ContainsKey(filename)) return false;
+        // The filename matched via keywords (non-canonical path) - it's modified
+        return true;
+    }
+
 
 
     /// <summary>
@@ -166,13 +183,41 @@ internal static class StarshipLogic
                 if (!hasSeed) continue;
 
                 string name = ship.GetString("Name") ?? "";
+
+                // Resolve ship type from resource filename
+                string filename = "";
+                try { filename = resource?.GetString("Filename") ?? ""; } catch { }
+                string shipType = LookupShipTypeName(filename);
+
+                // Resolve class from inventory
+                string cls = "";
+                try
+                {
+                    var inv = ship.GetObject("Inventory");
+                    var classObj = inv?.GetObject("Class");
+                    cls = classObj?.GetString("InventoryClass") ?? "";
+                }
+                catch { }
+
+                string displayName;
                 if (string.IsNullOrEmpty(name))
-                    name = $"Ship {i + 1}";
-                list.Add(new ShipListItem(name, i));
+                {
+                    // No custom name: show slot, type, class: "[1] Hauler - C"
+                    string typeLabel = string.IsNullOrEmpty(shipType) ? "Ship" : shipType;
+                    string clsLabel = string.IsNullOrEmpty(cls) ? "?" : cls;
+                    displayName = $"[{i + 1}] {typeLabel} - {clsLabel}";
+                }
+                else
+                {
+                    // Named ship: show slot, name, class: "[5] VCF Blackbird - S"
+                    string clsLabel = string.IsNullOrEmpty(cls) ? "?" : cls;
+                    displayName = $"[{i + 1}] {name} - {clsLabel}";
+                }
+                list.Add(new ShipListItem(displayName, i));
             }
             catch
             {
-                list.Add(new ShipListItem($"Ship {i + 1}", i));
+                list.Add(new ShipListItem($"[{i + 1}] Ship - ?", i));
             }
         }
         return list;
@@ -246,6 +291,7 @@ internal static class StarshipLogic
             Name = name,
             Filename = filename,
             ShipTypeName = shipTypeName,
+            IsResourceModified = IsFilenameModified(filename),
             Seed = seed,
             ClassIndex = classIndex,
             UseOldColours = useOldColours,
@@ -275,10 +321,22 @@ internal static class StarshipLogic
 
         if (!string.IsNullOrEmpty(values.SelectedTypeName))
         {
-            string filename = LookupFilenameForType(values.SelectedTypeName);
-            var resource = ship.GetObject("Resource");
-            if (resource != null && !string.IsNullOrEmpty(filename))
-                resource.Set("Filename", filename);
+            // When a custom (modified) filename is set, preserve it instead of
+            // overwriting with the canonical filename for the selected type.
+            // This allows imported ships with intentionally modified resource
+            // paths to retain their custom values.
+            if (!string.IsNullOrEmpty(values.CustomFilename))
+            {
+                var resource = ship.GetObject("Resource");
+                resource?.Set("Filename", values.CustomFilename);
+            }
+            else
+            {
+                string filename = LookupFilenameForType(values.SelectedTypeName);
+                var resource = ship.GetObject("Resource");
+                if (resource != null && !string.IsNullOrEmpty(filename))
+                    resource.Set("Filename", filename);
+            }
         }
 
         if (values.ClassIndex >= 0)
@@ -307,19 +365,20 @@ internal static class StarshipLogic
         // Write base stats to ALL inventories to keep them in sync
         // Determine ship category for clamping: "Alien" if the selected type contains it, else "Normal"
         string shipCategory = (values.SelectedTypeName ?? "").Contains("Alien", StringComparison.OrdinalIgnoreCase) ? "Alien" : "Normal";
-        double clampedDamage = Data.BaseStatLimits.ClampStatValue(shipCategory, "^SHIP_DAMAGE", values.Damage, Data.StatCategory.Ship);
-        double clampedShield = Data.BaseStatLimits.ClampStatValue(shipCategory, "^SHIP_SHIELD", values.Shield, Data.StatCategory.Ship);
-        double clampedHyperdrive = Data.BaseStatLimits.ClampStatValue(shipCategory, "^SHIP_HYPERDRIVE", values.Hyperdrive, Data.StatCategory.Ship);
-        double clampedManeuver = Data.BaseStatLimits.ClampStatValue(shipCategory, "^SHIP_AGILE", values.Maneuver, Data.StatCategory.Ship);
+
+        double writeDamage = Data.BaseStatLimits.ConditionalClampStatValue(shipCategory, "^SHIP_DAMAGE", values.Damage, Data.StatCategory.Ship, values.RawStatValues);
+        double writeShield = Data.BaseStatLimits.ConditionalClampStatValue(shipCategory, "^SHIP_SHIELD", values.Shield, Data.StatCategory.Ship, values.RawStatValues);
+        double writeHyperdrive = Data.BaseStatLimits.ConditionalClampStatValue(shipCategory, "^SHIP_HYPERDRIVE", values.Hyperdrive, Data.StatCategory.Ship, values.RawStatValues);
+        double writeManeuver = Data.BaseStatLimits.ConditionalClampStatValue(shipCategory, "^SHIP_AGILE", values.Maneuver, Data.StatCategory.Ship, values.RawStatValues);
 
         foreach (string invKey in new[] { "Inventory", "Inventory_TechOnly", "Inventory_Cargo" })
         {
             var inv = ship.GetObject(invKey);
             if (inv == null) continue;
-            StatHelper.WriteBaseStatValue(inv, "^SHIP_DAMAGE", clampedDamage);
-            StatHelper.WriteBaseStatValue(inv, "^SHIP_SHIELD", clampedShield);
-            StatHelper.WriteBaseStatValue(inv, "^SHIP_HYPERDRIVE", clampedHyperdrive);
-            StatHelper.WriteBaseStatValue(inv, "^SHIP_AGILE", clampedManeuver);
+            StatHelper.WriteBaseStatValue(inv, "^SHIP_DAMAGE", writeDamage);
+            StatHelper.WriteBaseStatValue(inv, "^SHIP_SHIELD", writeShield);
+            StatHelper.WriteBaseStatValue(inv, "^SHIP_HYPERDRIVE", writeHyperdrive);
+            StatHelper.WriteBaseStatValue(inv, "^SHIP_AGILE", writeManeuver);
         }
 
         // ShipUsesLegacyColours is an array indexed per-ship; update the correct element
@@ -381,6 +440,23 @@ internal static class StarshipLogic
         ClearJsonArray(inventory.GetArray("ValidSlotIndices"));
         ClearJsonArray(inventory.GetArray("BaseStatValues"));
         ClearJsonArray(inventory.GetArray("SpecialSlots"));
+    }
+
+    /// <summary>
+    /// Invalidates a corvette's PlayerShipBase entry in PersistentPlayerBases
+    /// by clearing its Objects array, preventing orphaned base data from
+    /// persisting after the corvette ship is deleted.
+    /// </summary>
+    /// <param name="bases">The PersistentPlayerBases JSON array.</param>
+    /// <param name="shipIndex">The ship's index in the ShipOwnership array.</param>
+    internal static void InvalidateCorvetteBase(JsonArray? bases, int shipIndex)
+    {
+        if (bases == null) return;
+        int baseIdx = FindCorvetteBaseIndex(bases, shipIndex);
+        if (baseIdx < 0) return;
+
+        var baseObj = bases.GetObject(baseIdx);
+        ClearJsonArray(baseObj.GetArray("Objects"));
     }
 
     // --- Ship Customisation Data (CharacterCustomisationData) --------
@@ -518,6 +594,31 @@ internal static class StarshipLogic
     }
 
     /// <summary>
+    /// Finds the first empty (invalidated) ship slot in the ownership array.
+    /// A slot is empty when its Seed[0] is false.
+    /// </summary>
+    /// <param name="shipOwnership">The JSON array of ship ownership entries.</param>
+    /// <returns>The index of the first empty slot, or -1 if all slots are occupied.</returns>
+    internal static int FindEmptySlot(JsonArray shipOwnership)
+    {
+        for (int i = 0; i < shipOwnership.Length; i++)
+        {
+            try
+            {
+                var ship = shipOwnership.GetObject(i);
+                var resource = ship.GetObject("Resource");
+                var seedArr = resource?.GetArray("Seed");
+                bool hasSeed = false;
+                try { hasSeed = seedArr != null && seedArr.Length > 0 && seedArr.GetBool(0); }
+                catch { }
+                if (!hasSeed) return i;
+            }
+            catch { }
+        }
+        return -1;
+    }
+
+    /// <summary>
     /// Returns the array index of the first valid (non-invalidated) ship, or -1 if none.
     /// </summary>
     internal static int FindFirstValidShipIndex(JsonArray shipOwnership)
@@ -551,8 +652,8 @@ internal static class StarshipLogic
     // Per ship type:
     //   Normal ships   -> [Ship, AllShips, AllShipsExceptAlien]
     //   Living Ship    -> [AlienShip, AllShips]
-    //   Robot/Sentinel -> [RobotShip, AllShips, AllShipsExceptAlien]
-    //   Corvette       -> [Corvette, AllShips, AllShipsExceptAlien]
+    //   Robot/Sentinel -> [RobotShip, Ship, AllShips, AllShipsExceptAlien]
+    //   Corvette       -> [Corvette, Ship, AllShips, AllShipsExceptAlien]
     /// <summary>
     /// Maps a ship type display name to the Technology Category owner type
     /// used for inventory tech filtering. This determines which technology items
@@ -588,33 +689,36 @@ internal static class StarshipLogic
     }
 
     /// <summary>
-    /// Finds the index of a corvette's player ship base entry by matching its seed against the base owner timestamp.
+    /// Finds the index of a corvette's player ship base entry in the PersistentPlayerBases array.
+    /// Matches by the base's UserData field, which stores the ShipOwnership index directly.
+    /// Only bases with BaseType "PlayerShipBase" are considered.
     /// </summary>
     /// <param name="bases">The persistent player bases JSON array.</param>
-    /// <param name="seedDecimal">The decimal seed value to match.</param>
+    /// <param name="shipIndex">The ship's index in the ShipOwnership array.</param>
     /// <returns>The base index, or -1 if not found.</returns>
-    internal static int FindCorvetteBaseIndex(JsonArray? bases, long seedDecimal)
+    internal static int FindCorvetteBaseIndex(JsonArray? bases, int shipIndex)
     {
-        if (bases == null || seedDecimal == 0) return -1;
+        if (bases == null) return -1;
+
         for (int i = 0; i < bases.Length; i++)
         {
             try
             {
                 var b = bases.GetObject(i);
-                var owner = b.GetObject("Owner");
-                if (owner == null) continue;
-                long ts = 0;
-                try { ts = (long)owner.GetDouble("TS"); } catch { }
-                if (ts != seedDecimal) continue;
-
                 var baseType = b.GetObject("BaseType");
                 if (baseType == null) continue;
                 string bt = baseType.GetString("PersistentBaseTypes") ?? "";
-                if (bt.Equals("PlayerShipBase", StringComparison.OrdinalIgnoreCase))
+                if (!bt.Equals("PlayerShipBase", StringComparison.OrdinalIgnoreCase))
+                    continue;
+
+                long ud = 0;
+                try { ud = (long)b.GetDouble("UserData"); } catch { }
+                if (ud == shipIndex)
                     return i;
             }
             catch { }
         }
+
         return -1;
     }
 
@@ -635,6 +739,93 @@ internal static class StarshipLogic
             return string.IsNullOrEmpty(name) ? $"Ship {primaryIndex + 1}" : name;
         }
         catch { return "Unknown"; }
+    }
+
+    /// <summary>
+    /// Checks whether the CCD entry represents the default/blank customisation
+    /// (all empty collections, Scale 1.0, SelectedPreset "^", PaletteID "^").
+    /// </summary>
+    internal static bool IsCcdDefault(JsonObject ccd)
+    {
+        try
+        {
+            string preset = ccd.GetString("SelectedPreset") ?? "";
+            if (preset != "^" && preset != "") return false;
+
+            var custom = ccd.GetObject("CustomData");
+            if (custom == null) return true;
+
+            string palette = custom.GetString("PaletteID") ?? "";
+            if (palette != "^" && palette != "") return false;
+
+            foreach (var name in new[] { "DescriptorGroups", "Colours", "TextureOptions", "BoneScales" })
+            {
+                var arr = custom.GetArray(name);
+                if (arr != null && arr.Length > 0) return false;
+            }
+
+            return true;
+        }
+        catch
+        {
+            return true;
+        }
+    }
+
+    /// <summary>
+    /// Attempts to read a .nmsship file as a ZIP archive containing so.json, ccd.json, and objects.json.
+    /// Returns null if the file is not a ZIP or does not contain so.json.
+    /// This is to support IO Tool exports which are ZIPs containing the ship data in JSON files within.
+    /// </summary>
+    internal static (JsonObject ship, JsonObject? ccd, JsonArray? objects)? TryReadNmsshipZip(string filePath)
+    {
+        try
+        {
+            using var fs = new FileStream(filePath, FileMode.Open, FileAccess.Read, FileShare.Read);
+            byte[] header = new byte[4];
+            if (fs.Read(header, 0, 4) < 4) return null;
+            // PK header check (ZIP magic: 0x50 0x4B 0x03 0x04)
+            // WHO'S TOES ARE THOSE???
+            if (header[0] != 0x50 || header[1] != 0x4B || header[2] != 0x03 || header[3] != 0x04)
+                return null;
+
+            fs.Position = 0;
+            using var archive = new ZipArchive(fs, ZipArchiveMode.Read);
+
+            var soEntry = archive.GetEntry("so.json");
+            if (soEntry == null) return null;
+
+            JsonObject ship;
+            using (var reader = new StreamReader(soEntry.Open()))
+            {
+                string json = reader.ReadToEnd();
+                ship = JsonObject.Parse(json);
+            }
+
+            JsonObject? ccd = null;
+            var ccdEntry = archive.GetEntry("ccd.json");
+            if (ccdEntry != null)
+            {
+                using var reader = new StreamReader(ccdEntry.Open());
+                string json = reader.ReadToEnd();
+                ccd = JsonObject.Parse(json);
+            }
+
+            JsonArray? objects = null;
+            var objectsEntry = archive.GetEntry("objects.json");
+            if (objectsEntry != null)
+            {
+                using var reader = new StreamReader(objectsEntry.Open());
+                string json = reader.ReadToEnd();
+                objects = JsonArray.Parse(json);
+            }
+
+            return (ship, ccd, objects);
+        }
+        catch
+        {
+            return null;
+        }
     }
 
     /// <summary>
@@ -665,6 +856,8 @@ internal static class StarshipLogic
     /// <summary>
     /// Represents a ship type in the type selection combo box.
     /// Carries the English internal name for data lookups while displaying a localised name.
+    /// When <see cref="CustomFilename"/> is set, the item represents a ship whose resource
+    /// filename was intentionally modified from the default for that type.
     /// </summary>
     internal sealed class ShipTypeItem
     {
@@ -672,11 +865,18 @@ internal static class StarshipLogic
         public string InternalName { get; }
         /// <summary>The localised display name shown in the combo box.</summary>
         public string DisplayName { get; }
+        /// <summary>
+        /// When non-null, this item represents a ship with a modified (non-canonical)
+        /// resource filename. The value is the actual custom filename that should be
+        /// preserved on save instead of the canonical filename for the type.
+        /// </summary>
+        public string? CustomFilename { get; }
 
-        public ShipTypeItem(string internalName, string displayName)
+        public ShipTypeItem(string internalName, string displayName, string? customFilename = null)
         {
             InternalName = internalName;
             DisplayName = displayName;
+            CustomFilename = customFilename;
         }
 
         /// <inheritdoc/>
@@ -694,6 +894,11 @@ internal static class StarshipLogic
         public string Filename { get; set; } = "";
         /// <summary>The resolved ship type display name (e.g. "Fighter", "Hauler").</summary>
         public string ShipTypeName { get; set; } = "";
+        /// <summary>
+        /// Whether the ship's resource filename differs from the canonical filename
+        /// for its resolved type, indicating an intentional modification.
+        /// </summary>
+        public bool IsResourceModified { get; set; }
         /// <summary>The ship's procedural generation seed as a hex string.</summary>
         public string Seed { get; set; } = "";
         /// <summary>Index into <see cref="ShipClasses"/> for the ship's class grade.</summary>
@@ -731,6 +936,11 @@ internal static class StarshipLogic
         public string Name { get; set; } = "";
         /// <summary>The selected ship type display name, or <c>null</c> to leave unchanged.</summary>
         public string? SelectedTypeName { get; set; }
+        /// <summary>
+        /// When non-null, this is a custom (modified) resource filename that should be
+        /// preserved on save instead of looking up the canonical filename from the type name.
+        /// </summary>
+        public string? CustomFilename { get; set; }
         /// <summary>Index into <see cref="ShipClasses"/> for the desired class grade.</summary>
         public int ClassIndex { get; set; } = -1;
         /// <summary>The seed hex string to set.</summary>
@@ -749,5 +959,260 @@ internal static class StarshipLogic
         public int ShipIndex { get; set; } = -1;
         /// <summary>The index of the ship to set as primary.</summary>
         public int PrimaryShipIndex { get; set; }
+
+        /// <summary>Raw (unclamped) stat values read from JSON at load time.
+        /// When set, each stat is only written if the UI value differs from
+        /// the clamped raw value - preserving externally-edited values.</summary>
+        public Dictionary<string, double>? RawStatValues { get; set; }
+    }
+
+    // --- Corvette optimisation ---
+
+    /// <summary>Minimum scale for the beam-up landing bay.</summary>
+    private const double MinBeamUpScale = 0.058;
+
+    /// <summary>
+    /// Returns the optimiser sort priority for a corvette building object.
+    ///
+    /// Uses the game's own <c>CorvettePartCategory</c> data (loaded from
+    /// <c>Corvette.json</c> via <see cref="Data.StarshipDatabase"/>) to
+    /// determine the correct category.  Only five functional categories
+    /// are sorted; everything else is left unsorted at the end.
+    ///
+    /// The priority order is:
+    /// Reactors -> Engines -> Landing Gears -> Landing Bays -> Cockpit -> Other
+    /// </summary>
+    internal static int GetPartPriority(string objectId)
+        => Data.StarshipDatabase.GetOptimizerPriority(objectId);
+
+    /// <summary>
+    /// Optimises a corvette's base building objects by reordering them to improve
+    /// the ships stats/handling in game.
+    ///
+    /// The priority order is determined by the game's own CorvettePartCategory data:
+    /// Reactors -> Engines (Thrusters + Wings) -> Landing Gears -> Landing Bays -> Cockpit -> Other
+    ///
+    /// Only functional parts (Reactor, Engine, Gear, Access, Cockpit) are sorted.
+    /// Non-functional parts (Wing, Shield, Hull, Connector, Interior, Decor, Gun,
+    /// Hab, etc.) are left unsorted at the end, preserving original save order.
+    ///
+    /// Within each sorted category, parts are in ordered (descending) by
+    /// Y-position (height) i.e. highest parts first.
+    ///
+    /// The optimisation also enforces these Corvette game rules:
+    ///   - The first cockpit becomes the camera cockpit
+    ///   - The second cockpit becomes the boarding cockpit
+    ///   - The highest landing bay becomes the active beam-up destination
+    ///   - The beam-up landing bay must be at least 0.058 in scale
+    ///   
+    /// Enforcements are derived from community testing and input.
+    /// 
+    /// </summary>
+    /// <param name="bases">The PersistentPlayerBases array from the save.</param>
+    /// <param name="shipIndex">The ship's index in the ShipOwnership array.</param>
+    /// <returns>The number of objects reordered, or -1 if the base was not found.</returns>
+    internal static int OptimiseCorvetteBase(JsonArray? bases, int shipIndex)
+    {
+        if (bases == null) return -1;
+
+        int baseIdx = FindCorvetteBaseIndex(bases, shipIndex);
+        if (baseIdx < 0) return -1;
+
+        var baseObj = bases.GetObject(baseIdx);
+        var objectsArr = baseObj.GetArray("Objects");
+        if (objectsArr == null || objectsArr.Length <= 1) return 0;
+
+        return ReorderBuildingObjects(objectsArr);
+    }
+
+    /// <summary>
+    /// Checks whether a corvette's building objects are already in the order
+    /// that <see cref="OptimiseCorvetteBase"/> would produce. This is a
+    /// non-destructive read-only check used to display an indicator dot.
+    /// </summary>
+    /// <param name="bases">The PersistentPlayerBases array.</param>
+    /// <param name="shipIndex">The ship's slot index in ShipOwnership.</param>
+    /// <returns>
+    /// <c>true</c> if the objects are already in optimised order (or the base
+    /// has 0-1 objects); <c>false</c> if they would be reordered; also
+    /// <c>true</c> if the base cannot be found (nothing to optimise).
+    /// </returns>
+    internal static bool IsCorvetteOptimised(JsonArray? bases, int shipIndex)
+    {
+        if (bases == null) return true;
+
+        int baseIdx = FindCorvetteBaseIndex(bases, shipIndex);
+        if (baseIdx < 0) return true;
+
+        var baseObj = bases.GetObject(baseIdx);
+        var objectsArr = baseObj.GetArray("Objects");
+        if (objectsArr == null || objectsArr.Length <= 1) return true;
+
+        // Build the expected order by extracting priorities and sort keys,
+        // then comparing against the current order without mutating anything.
+        int count = objectsArr.Length;
+        var items = new List<(int origIndex, int priority, string objectId)>(count);
+        for (int i = 0; i < count; i++)
+        {
+            var obj = objectsArr.GetObject(i);
+            string objectId = "";
+            try { objectId = obj.GetString("ObjectID") ?? ""; } catch { }
+            int priority = GetPartPriority(objectId);
+            items.Add((i, priority, objectId));
+        }
+
+        // Create a sorted copy of indices using the same comparator as ReorderBuildingObjects
+        var sortedIndices = new List<int>(count);
+        for (int i = 0; i < count; i++) sortedIndices.Add(i);
+
+        sortedIndices.Sort((a, b) =>
+        {
+            var ia = items[a];
+            var ib = items[b];
+
+            int cmp = ia.priority.CompareTo(ib.priority);
+            if (cmp != 0) return cmp;
+
+            string keyA = GetSortKey(ia.priority, ia.objectId, ia.origIndex);
+            string keyB = GetSortKey(ib.priority, ib.objectId, ib.origIndex);
+            cmp = string.Compare(keyA, keyB, StringComparison.OrdinalIgnoreCase);
+            if (cmp != 0) return cmp;
+
+            return ia.origIndex.CompareTo(ib.origIndex);
+        });
+
+        // If the sorted order matches the original order, the array is already optimised
+        for (int i = 0; i < count; i++)
+        {
+            if (sortedIndices[i] != i) return false;
+        }
+
+        return true;
+    }
+
+    /// <summary>
+    /// Reads the Y-component (height) from an object's Position array.
+    /// Returns 0 if Position is missing or malformed.
+    /// </summary>
+    private static double GetPositionY(JsonObject obj)
+    {
+        try
+        {
+            var pos = obj.GetArray("Position");
+            if (pos != null && pos.Length >= 2)
+                return pos.GetDouble(1); // Y is index 1 in [X, Y, Z]
+        }
+        catch { }
+        return 0.0;
+    }
+
+    /// <summary>
+    /// Reads the Scale value from an object.
+    /// Returns 1.0 if Scale is missing or malformed.
+    /// </summary>
+    private static double GetScale(JsonObject obj)
+    {
+        try { return obj.GetDouble("Scale"); }
+        catch { return 1.0; }
+    }
+
+    /// <summary>
+    /// Reorders a building objects array in place by part category priority.
+    /// The priority order is driven by the game's own CorvettePartCategory data:
+    /// Reactors -> Engines -> Landing Gears -> Landing Bays -> Cockpit -> Other
+    ///
+    /// Within each sorted category, parts are ordered by Y-position descending
+    /// (highest parts first). Unsorted parts preserve their original relative order.
+    ///
+    /// Corvette rules enforced:
+    /// The beam-up landing bay (last in Access group = highest Y) must have
+    /// Scale >= 0.058f - if below, it is clamped up.
+    /// </summary>
+    /// <param name="objects">The Objects array from a PersistentPlayerBase entry.</param>
+    /// <returns>The number of objects in the reordered array.</returns>
+    internal static int ReorderBuildingObjects(JsonArray objects)
+    {
+        int count = objects.Length;
+        if (count <= 1) return count;
+
+        // Extract all objects with their original indices and priority
+        var items = new List<(int origIndex, int priority, string objectId, JsonObject obj)>(count);
+        for (int i = 0; i < count; i++)
+        {
+            var obj = objects.GetObject(i);
+            string objectId = "";
+            try { objectId = obj.GetString("ObjectID") ?? ""; } catch { }
+            int priority = GetPartPriority(objectId);
+            items.Add((i, priority, objectId, obj));
+        }
+
+        // Sort matching algorithm:
+        //   Primary: by category priority (Reactor -> Engine -> Gear -> Access -> Cockpit -> Other)
+        //   Secondary (then by with StringComparison.OrdinalIgnoreCase):
+        //     - Categories 1->4 (Reactor, Thruster, Wing, Gear) by fixed sub-order from priority map
+        //     - Categories 5->6 (Access, Cockpit) preserve original array index
+        //     - Other (int.MaxValue): alphabetically by object list display name, fallback to ObjectID
+        //   Tertiary: origIndex tiebreaker (in place of LINQ)
+        items.Sort((a, b) =>
+        {
+            int cmp = a.priority.CompareTo(b.priority);
+            if (cmp != 0) return cmp;
+
+            string keyA = GetSortKey(a.priority, a.objectId, a.origIndex);
+            string keyB = GetSortKey(b.priority, b.objectId, b.origIndex);
+            cmp = string.Compare(keyA, keyB, StringComparison.OrdinalIgnoreCase);
+            if (cmp != 0) return cmp;
+
+            // Stable tiebreaker: preserve original array order for equal keys
+            return a.origIndex.CompareTo(b.origIndex);
+        });
+
+        // Enforce the beam-up landing bay scale >= 0.058f.
+        // The last Access category object is the beam-up destination
+        int lastAccessIdx = -1;
+        for (int i = 0; i < items.Count; i++)
+        {
+            if (items[i].priority == Data.StarshipDatabase.AccessPriority)
+                lastAccessIdx = i;
+        }
+        if (lastAccessIdx >= 0)
+        {
+            var bayObj = items[lastAccessIdx].obj;
+            double scale = GetScale(bayObj);
+            if (scale < MinBeamUpScale)
+            {
+                bayObj.Set("Scale", MinBeamUpScale);
+            }
+        }
+
+        // Rebuild the array in sorted order
+        objects.Clear();
+        foreach (var (_, _, _, obj) in items)
+            objects.Add(obj);
+
+        return count;
+    }
+
+    /// <summary>
+    /// Computes the secondary sort key for a corvette building object.
+    /// </summary>
+    private static string GetSortKey(int priority, string objectId, int origIndex)
+    {
+        // Access (5) and Cockpit (6) preserve original index
+        if (priority == Data.StarshipDatabase.AccessPriority ||
+            priority == Data.StarshipDatabase.CockpitPriority)
+        {
+            return origIndex.ToString("D6");
+        }
+
+        // Other (int.MaxValue): alphabetical by object list display name, fallback to ObjectID
+        if (priority == Data.StarshipDatabase.OtherPriority)
+        {
+            string displayName = Data.StarshipDatabase.GetDisplayName(objectId);
+            return !string.IsNullOrEmpty(displayName) ? displayName : objectId;
+        }
+
+        // Categories 1 -> 4 (Reactor, Thruster, Wing, Gear) by fixed sub-order
+        return Data.StarshipDatabase.GetSubOrder(objectId).ToString("D6");
     }
 }

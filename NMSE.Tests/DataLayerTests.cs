@@ -192,16 +192,17 @@ public class DataLayerTests
     // --- GalaxyDatabase ----------------------------------------------
 
     [Fact]
-    public void GalaxyDatabase_Has256Galaxies()
+    public void GalaxyDatabase_Has257Galaxies()
     {
-        Assert.Equal(256, GalaxyDatabase.Galaxies.Length);
+        Assert.Equal(257, GalaxyDatabase.Galaxies.Length);
     }
 
     [Theory]
     [InlineData(0, "Euclid")]
     [InlineData(1, "Hilbert Dimension")]
     [InlineData(9, "Eissentam")]
-    [InlineData(255, "Amedarir")]
+    [InlineData(255, "Odyalutai")]
+    [InlineData(256, "Yilsrussimil")]
     public void GalaxyDatabase_GetGalaxyName_ReturnsCorrectName(int index, string expected)
     {
         Assert.Equal(expected, GalaxyDatabase.GetGalaxyName(index));
@@ -209,7 +210,7 @@ public class DataLayerTests
 
     [Theory]
     [InlineData(-1, "Unknown")]
-    [InlineData(256, "Unknown")]
+    [InlineData(257, "Unknown")]
     [InlineData(999, "Unknown")]
     public void GalaxyDatabase_GetGalaxyName_OutOfRange_ReturnsUnknown(int index, string expected)
     {
@@ -230,13 +231,14 @@ public class DataLayerTests
     public void GalaxyDatabase_GetGalaxyType_OutOfRange_ReturnsNormal()
     {
         Assert.Equal("Normal", GalaxyDatabase.GetGalaxyType(-1));
-        Assert.Equal("Normal", GalaxyDatabase.GetGalaxyType(256));
+        Assert.Equal("Normal", GalaxyDatabase.GetGalaxyType(257));
     }
 
     [Theory]
     [InlineData(0, "Euclid (1)")]
     [InlineData(9, "Eissentam (10)")]
-    [InlineData(255, "Amedarir (256)")]
+    [InlineData(255, "Odyalutai (256)")]
+    [InlineData(256, "Yilsrussimil (257)")]
     public void GalaxyDatabase_GetGalaxyDisplayName_ReturnsNameWithNumber(int index, string expected)
     {
         Assert.Equal(expected, GalaxyDatabase.GetGalaxyDisplayName(index));
@@ -246,7 +248,7 @@ public class DataLayerTests
     public void GalaxyDatabase_GetGalaxyDisplayName_OutOfRange_ReturnsUnknown()
     {
         Assert.Equal("Unknown", GalaxyDatabase.GetGalaxyDisplayName(-1));
-        Assert.Equal("Unknown", GalaxyDatabase.GetGalaxyDisplayName(256));
+        Assert.Equal("Unknown", GalaxyDatabase.GetGalaxyDisplayName(257));
     }
 
     [Fact]

@@ -301,6 +301,57 @@ public class IOLayerTests
         Assert.Equal(SaveFileManager.Platform.PS4, platform);
     }
 
+    // --- Special character save file tests ----------------------------
+
+    [Fact]
+    public void SaveFileManager_LoadSaveFile_SpecialCharacterSave_SaveNameIsString()
+    {
+        EnsureMapperLoaded();
+        var savePath = FindRefPath("_ref", "saves", "special_characters", "save.hg");
+        if (savePath == null) return; // skip if reference save not available
+
+        var data = SaveFileManager.LoadSaveFile(savePath);
+        var commonState = data.GetObject("CommonStateData");
+        Assert.NotNull(commonState);
+
+        // The save name contains Greek λ (U+03BB) and Latin Ŧ (U+0166).
+        // These are stored as raw UTF-8 bytes in the save file and must be
+        // decoded as a Unicode string, not misclassified as BinaryData.
+        var rawName = commonState!.Get("SaveName");
+        Assert.IsType<string>(rawName);
+
+        string name = commonState.GetString("SaveName")!;
+        Assert.Contains("\u03BB", name); // λ
+        Assert.Contains("\u0166", name); // Ŧ
+        Assert.Contains("Breach", name);
+    }
+
+    [Fact]
+    public void SaveFileManager_LoadSaveFile_SpecialCharacterSave_SettlementNamesAreStrings()
+    {
+        EnsureMapperLoaded();
+        var savePath = FindRefPath("_ref", "saves", "special_characters", "save.hg");
+        if (savePath == null) return;
+
+        var data = SaveFileManager.LoadSaveFile(savePath);
+        var playerState = data.GetObject("PlayerStateData");
+        var settlements = playerState?.GetArray("SettlementStatesV2");
+        if (settlements == null || settlements.Length == 0) return;
+
+        // Verify that no settlement names are incorrectly classified as BinaryData.
+        // Settlements 49 and 89 in the save have Greek characters in their names.
+        int binaryNameCount = 0;
+        for (int i = 0; i < settlements.Length; i++)
+        {
+            var settlement = settlements.GetObject(i);
+            if (settlement == null) continue;
+            var rawName = settlement.Get("Name");
+            if (rawName is BinaryData)
+                binaryNameCount++;
+        }
+        Assert.Equal(0, binaryNameCount);
+    }
+
     // --- Backup filtered zip test ------------------------------------
 
     [Fact]

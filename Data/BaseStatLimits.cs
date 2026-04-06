@@ -35,17 +35,17 @@ public static class BaseStatLimits
     {
         ["Normal"] = new()
         {
-            ["^SHIP_DAMAGE"] = new BaseStatRange { Id = "^SHIP_DAMAGE", MinValue = 0, MaxValue = 100 },
-            ["^SHIP_SHIELD"] = new BaseStatRange { Id = "^SHIP_SHIELD", MinValue = 0, MaxValue = 100 },
-            ["^SHIP_HYPERDRIVE"] = new BaseStatRange { Id = "^SHIP_HYPERDRIVE", MinValue = 0, MaxValue = 300 },
-            ["^SHIP_AGILE"] = new BaseStatRange { Id = "^SHIP_AGILE", MinValue = 0, MaxValue = 100 },
+            ["^SHIP_DAMAGE"] = new BaseStatRange { Id = "^SHIP_DAMAGE", MinValue = 0, MaxValue = int.MaxValue },
+            ["^SHIP_SHIELD"] = new BaseStatRange { Id = "^SHIP_SHIELD", MinValue = 0, MaxValue = int.MaxValue },
+            ["^SHIP_HYPERDRIVE"] = new BaseStatRange { Id = "^SHIP_HYPERDRIVE", MinValue = 0, MaxValue = int.MaxValue },
+            ["^SHIP_AGILE"] = new BaseStatRange { Id = "^SHIP_AGILE", MinValue = 0, MaxValue = int.MaxValue },
         },
         ["Alien"] = new()
         {
-            ["^SHIP_DAMAGE"] = new BaseStatRange { Id = "^SHIP_DAMAGE", MinValue = 0, MaxValue = 100 },
-            ["^SHIP_SHIELD"] = new BaseStatRange { Id = "^SHIP_SHIELD", MinValue = 0, MaxValue = 100 },
-            ["^SHIP_HYPERDRIVE"] = new BaseStatRange { Id = "^SHIP_HYPERDRIVE", MinValue = 0, MaxValue = 300 },
-            ["^SHIP_AGILE"] = new BaseStatRange { Id = "^SHIP_AGILE", MinValue = 0, MaxValue = 100 },
+            ["^SHIP_DAMAGE"] = new BaseStatRange { Id = "^SHIP_DAMAGE", MinValue = 0, MaxValue = int.MaxValue },
+            ["^SHIP_SHIELD"] = new BaseStatRange { Id = "^SHIP_SHIELD", MinValue = 0, MaxValue = int.MaxValue },
+            ["^SHIP_HYPERDRIVE"] = new BaseStatRange { Id = "^SHIP_HYPERDRIVE", MinValue = 0, MaxValue = int.MaxValue },
+            ["^SHIP_AGILE"] = new BaseStatRange { Id = "^SHIP_AGILE", MinValue = 0, MaxValue = int.MaxValue },
         },
     };
 
@@ -57,9 +57,9 @@ public static class BaseStatLimits
     {
         ["Normal"] = new()
         {
-            ["^WEAPON_DAMAGE"] = new BaseStatRange { Id = "^WEAPON_DAMAGE", MinValue = 0, MaxValue = 100 },
-            ["^WEAPON_MINING"] = new BaseStatRange { Id = "^WEAPON_MINING", MinValue = 0, MaxValue = 100 },
-            ["^WEAPON_SCAN"] = new BaseStatRange { Id = "^WEAPON_SCAN", MinValue = 0, MaxValue = 100 },
+            ["^WEAPON_DAMAGE"] = new BaseStatRange { Id = "^WEAPON_DAMAGE", MinValue = 0, MaxValue = int.MaxValue },
+            ["^WEAPON_MINING"] = new BaseStatRange { Id = "^WEAPON_MINING", MinValue = 0, MaxValue = int.MaxValue },
+            ["^WEAPON_SCAN"] = new BaseStatRange { Id = "^WEAPON_SCAN", MinValue = 0, MaxValue = int.MaxValue },
         },
     };
 
@@ -71,8 +71,8 @@ public static class BaseStatLimits
     {
         ["Normal"] = new()
         {
-            ["^FREI_HYPERDRIVE"] = new BaseStatRange { Id = "^FREI_HYPERDRIVE", MinValue = 0, MaxValue = 300 },
-            ["^FREI_FLEET"] = new BaseStatRange { Id = "^FREI_FLEET", MinValue = 0, MaxValue = 100 },
+            ["^FREI_HYPERDRIVE"] = new BaseStatRange { Id = "^FREI_HYPERDRIVE", MinValue = 0, MaxValue = int.MaxValue },
+            ["^FREI_FLEET"] = new BaseStatRange { Id = "^FREI_FLEET", MinValue = 0, MaxValue = int.MaxValue },
         },
     };
 
@@ -114,6 +114,25 @@ public static class BaseStatLimits
             return Math.Max(range.MinValue, Math.Min(value, range.MaxValue));
         }
         return value;
+    }
+
+    /// <summary>
+    /// Returns the clamped UI value unless it matches the clamped raw value (meaning
+    /// the user didn't change it), in which case the original raw value is returned
+    /// to preserve externally-edited data.
+    /// When <paramref name="rawValues"/> is null or does not contain the stat, falls
+    /// back to normal clamping.
+    /// </summary>
+    public static double ConditionalClampStatValue(string entityType, string statId, double uiValue,
+        StatCategory category, Dictionary<string, double>? rawValues)
+    {
+        if (rawValues != null && rawValues.TryGetValue(statId, out double raw))
+        {
+            double clamped = ClampStatValue(entityType, statId, raw, category);
+            if (uiValue == clamped)
+                return raw; // User didn't change it - preserve original value
+        }
+        return ClampStatValue(entityType, statId, uiValue, category);
     }
 
     /// <summary>

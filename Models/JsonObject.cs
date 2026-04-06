@@ -255,6 +255,35 @@ public partial class JsonObject
             BuildIndex();
     }
 
+    /// <summary>
+    /// Moves the property at <paramref name="fromIndex"/> to <paramref name="toIndex"/>,
+    /// shifting other properties accordingly. Used for drag-drop reordering in the JSON editor.
+    /// </summary>
+    public void Reorder(int fromIndex, int toIndex)
+    {
+        if (fromIndex < 0 || fromIndex >= Length) throw new ArgumentOutOfRangeException(nameof(fromIndex));
+        if (toIndex < 0 || toIndex >= Length) throw new ArgumentOutOfRangeException(nameof(toIndex));
+        if (fromIndex == toIndex) return;
+
+        string name = _names[fromIndex];
+        object? value = _values[fromIndex];
+
+        if (fromIndex < toIndex)
+        {
+            Array.Copy(_names, fromIndex + 1, _names, fromIndex, toIndex - fromIndex);
+            Array.Copy(_values, fromIndex + 1, _values, fromIndex, toIndex - fromIndex);
+        }
+        else
+        {
+            Array.Copy(_names, toIndex, _names, toIndex + 1, fromIndex - toIndex);
+            Array.Copy(_values, toIndex, _values, toIndex + 1, fromIndex - toIndex);
+        }
+
+        _names[toIndex] = name;
+        _values[toIndex] = value;
+        _index = null;
+    }
+
     // Type-safe getters - use GetValue for path/transform support
 
     /// <summary>Returns the value at <paramref name="name"/> as a <see cref="JsonObject"/>, or <c>null</c>.</summary>

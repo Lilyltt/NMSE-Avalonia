@@ -138,8 +138,8 @@ public class GameItem
     //   Suit        -> [Suit]
     //   Ship        -> [Ship, AllShips, AllShipsExceptAlien]
     //   AlienShip   -> [AlienShip, AllShips]
-    //   RobotShip   -> [RobotShip, AllShips, AllShipsExceptAlien]
-    //   Corvette    -> [Corvette, AllShips, AllShipsExceptAlien]
+    //   RobotShip   -> [RobotShip, Ship, AllShips, AllShipsExceptAlien]
+    //   Corvette    -> [Corvette, Ship, AllShips, AllShipsExceptAlien]
     //   Weapon      -> [Weapon]
     //   Freighter   -> [Freighter]
     //   Exocraft    -> [Exocraft, AllVehicles]
@@ -189,8 +189,8 @@ public class GameItem
 
             // Specific ship subtypes (set dynamically per selected ship)
             "AlienShip" => TechnologyCategory is "AlienShip" or "AllShips",
-            "RobotShip" => TechnologyCategory is "RobotShip" or "AllShips" or "AllShipsExceptAlien",
-            "Corvette" => TechnologyCategory is "Corvette" or "AllShips" or "AllShipsExceptAlien",
+            "RobotShip" => TechnologyCategory is "RobotShip" or "Ship" or "AllShips" or "AllShipsExceptAlien",
+            "Corvette" => TechnologyCategory is "Corvette" or "Ship" or "AllShips" or "AllShipsExceptAlien",
 
             // Specific vehicle subtypes (set dynamically per selected vehicle)
             "Exocraft" => TechnologyCategory is "Exocraft" or "AllVehicles",

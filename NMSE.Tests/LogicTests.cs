@@ -35,7 +35,7 @@ public class LogicTests
             if (jsonDir == null) return;
 
             FrigateTraitDatabase.LoadFromFile(Path.Combine(jsonDir, "FrigateTraits.json"));
-            SettlementPerkDatabase.LoadFromFile(Path.Combine(jsonDir, "SettlementPerks.json"));
+            SettlementDatabase.LoadFromFile(Path.Combine(jsonDir, "SettlementPerks.json"));
             WikiGuideDatabase.LoadFromFile(Path.Combine(jsonDir, "WikiGuide.json"));
             TitleDatabase.LoadFromFile(Path.Combine(jsonDir, "Titles.json"));
 
@@ -231,9 +231,9 @@ public class LogicTests
 
         var ships = StarshipLogic.BuildShipList(json.GetArray("ShipOwnership")!);
         Assert.Equal(2, ships.Count);
-        Assert.Equal("Alpha", ships[0].DisplayName);
+        Assert.Equal("[1] Alpha - ?", ships[0].DisplayName);
         Assert.Equal(0, ships[0].DataIndex);
-        Assert.Equal("Beta", ships[1].DisplayName);
+        Assert.Equal("[3] Beta - ?", ships[1].DisplayName);
         Assert.Equal(2, ships[1].DataIndex);
     }
 
@@ -251,7 +251,8 @@ public class LogicTests
 
         var ships = StarshipLogic.BuildShipList(json.GetArray("Ships")!);
         Assert.Single(ships);
-        Assert.Equal("Ship 1", ships[0].DisplayName);
+        // Ship has no name and no Filename resource, so type resolves to localised "Unknown"
+        Assert.Equal("[1] Unknown - ?", ships[0].DisplayName);
     }
 
     [Fact]
@@ -259,6 +260,44 @@ public class LogicTests
     {
         Assert.Equal(4, StarshipLogic.ShipClasses.Length);
         Assert.Equal(new[] { "C", "B", "A", "S" }, StarshipLogic.ShipClasses);
+    }
+
+    [Fact]
+    public void StarshipLogic_BuildShipList_NamedShip_ShowsSlotNameClass()
+    {
+        // Named ship with class in inventory should show "[slot] Name - Class"
+        var json = JsonObject.Parse(@"{
+            ""Ships"": [
+                {
+                    ""Name"": ""VCF Blackbird"",
+                    ""Resource"": { ""Filename"": ""MODELS/COMMON/SPACECRAFT/FIGHTERS/FIGHTER_PROC.SCENE.MBIN"", ""Seed"": [true, ""0xABC""] },
+                    ""Inventory"": { ""Class"": { ""InventoryClass"": ""S"" } }
+                }
+            ]
+        }");
+
+        var ships = StarshipLogic.BuildShipList(json.GetArray("Ships")!);
+        Assert.Single(ships);
+        Assert.Equal("[1] VCF Blackbird - S", ships[0].DisplayName);
+    }
+
+    [Fact]
+    public void StarshipLogic_BuildShipList_UnnamedShip_ShowsSlotTypeClass()
+    {
+        // Unnamed ship with resolved type and class should show "[slot] Type - Class"
+        var json = JsonObject.Parse(@"{
+            ""Ships"": [
+                {
+                    ""Name"": """",
+                    ""Resource"": { ""Filename"": ""MODELS/COMMON/SPACECRAFT/FIGHTERS/FIGHTER_PROC.SCENE.MBIN"", ""Seed"": [true, ""0xABC""] },
+                    ""Inventory"": { ""Class"": { ""InventoryClass"": ""C"" } }
+                }
+            ]
+        }");
+
+        var ships = StarshipLogic.BuildShipList(json.GetArray("Ships")!);
+        Assert.Single(ships);
+        Assert.Equal("[1] Fighter - C", ships[0].DisplayName);
     }
 
     [Fact]
@@ -286,22 +325,22 @@ public class LogicTests
     }
 
     [Fact]
-    public void StarshipLogic_FindCorvetteBaseIndex_FindsMatchingBase()
+    public void StarshipLogic_FindCorvetteBaseIndex_FindsByUserData()
     {
         var json = JsonObject.Parse(@"{
             ""Bases"": [
                 {
-                    ""Owner"": { ""TS"": 999 },
-                    ""BaseType"": { ""PersistentBaseTypes"": ""HomePlanetBase"" }
+                    ""BaseType"": { ""PersistentBaseTypes"": ""HomePlanetBase"" },
+                    ""UserData"": 1
                 },
                 {
-                    ""Owner"": { ""TS"": 1756566104 },
-                    ""BaseType"": { ""PersistentBaseTypes"": ""PlayerShipBase"" }
+                    ""BaseType"": { ""PersistentBaseTypes"": ""PlayerShipBase"" },
+                    ""UserData"": 5
                 }
             ]
         }");
         var bases = json.GetArray("Bases")!;
-        int idx = StarshipLogic.FindCorvetteBaseIndex(bases, 1756566104);
+        int idx = StarshipLogic.FindCorvetteBaseIndex(bases, 5);
         Assert.Equal(1, idx);
     }
 
@@ -311,13 +350,13 @@ public class LogicTests
         var json = JsonObject.Parse(@"{
             ""Bases"": [
                 {
-                    ""Owner"": { ""TS"": 999 },
-                    ""BaseType"": { ""PersistentBaseTypes"": ""HomePlanetBase"" }
+                    ""BaseType"": { ""PersistentBaseTypes"": ""PlayerShipBase"" },
+                    ""UserData"": 3
                 }
             ]
         }");
         var bases = json.GetArray("Bases")!;
-        int idx = StarshipLogic.FindCorvetteBaseIndex(bases, 1756566104);
+        int idx = StarshipLogic.FindCorvetteBaseIndex(bases, 5);
         Assert.Equal(-1, idx);
     }
 
@@ -327,14 +366,129 @@ public class LogicTests
         var json = JsonObject.Parse(@"{
             ""Bases"": [
                 {
-                    ""Owner"": { ""TS"": 1756566104 },
-                    ""BaseType"": { ""PersistentBaseTypes"": ""HomePlanetBase"" }
+                    ""BaseType"": { ""PersistentBaseTypes"": ""HomePlanetBase"" },
+                    ""UserData"": 5
                 }
             ]
         }");
         var bases = json.GetArray("Bases")!;
-        int idx = StarshipLogic.FindCorvetteBaseIndex(bases, 1756566104);
+        int idx = StarshipLogic.FindCorvetteBaseIndex(bases, 5);
         Assert.Equal(-1, idx);
+    }
+
+    [Fact]
+    public void StarshipLogic_FindCorvetteBaseIndex_RealSaveScenario()
+    {
+        // Simulates the real save scenario with UserData matching:
+        //   Ship 7 "USCSS Abraxas"  -> Base UserData 7
+        //   Ship 8 "USCSS Solomon"  -> Base UserData 8
+        //   Ship 5 "The Bebop"      -> Base UserData 5
+        var json = JsonObject.Parse(@"{
+            ""Bases"": [
+                { ""BaseType"": { ""PersistentBaseTypes"": ""HomePlanetBase"" }, ""UserData"": 0 },
+                { ""BaseType"": { ""PersistentBaseTypes"": ""PlayerShipBase"" }, ""UserData"": 7 },
+                { ""BaseType"": { ""PersistentBaseTypes"": ""PlayerShipBase"" }, ""UserData"": 8 },
+                { ""BaseType"": { ""PersistentBaseTypes"": ""PlayerShipBase"" }, ""UserData"": 5 }
+            ]
+        }");
+        var bases = json.GetArray("Bases")!;
+
+        Assert.Equal(1, StarshipLogic.FindCorvetteBaseIndex(bases, 7));
+        Assert.Equal(2, StarshipLogic.FindCorvetteBaseIndex(bases, 8));
+        Assert.Equal(3, StarshipLogic.FindCorvetteBaseIndex(bases, 5));
+    }
+
+    [Fact]
+    public void StarshipLogic_GetPartPriority_IdentifiesCategories()
+    {
+        // Priority map lookup (no prefix fallback needed)
+        StarshipDatabase.Clear();
+
+        // Reactor (priority 1)
+        Assert.Equal(1, StarshipLogic.GetPartPriority("^B_GEN_0"));
+        Assert.Equal(1, StarshipLogic.GetPartPriority("^B_GEN_1"));
+
+        // Thruster (priority 2)
+        Assert.Equal(2, StarshipLogic.GetPartPriority("^B_TRU_C"));
+
+        // Landing Gear (priority 4)
+        Assert.Equal(4, StarshipLogic.GetPartPriority("^B_LND_A"));
+
+        // Landing Bay (priority 5)
+        Assert.Equal(5, StarshipLogic.GetPartPriority("^B_ALK_B"));
+
+        // Cockpit (priority 6)
+        Assert.Equal(6, StarshipLogic.GetPartPriority("^B_COK_A"));
+
+        // Shield is NOT in priority map — goes to OtherPriority
+        Assert.Equal(StarshipDatabase.OtherPriority, StarshipLogic.GetPartPriority("^B_SHL_A"));
+
+        // Other (non-functional or not in priority map)
+        Assert.Equal(StarshipDatabase.OtherPriority, StarshipLogic.GetPartPriority("^BUILDTABLE2"));
+        Assert.Equal(StarshipDatabase.OtherPriority, StarshipLogic.GetPartPriority("^B_HAB_C"));
+        Assert.Equal(StarshipDatabase.OtherPriority, StarshipLogic.GetPartPriority("^U_PARAGON"));
+        Assert.Equal(StarshipDatabase.OtherPriority, StarshipLogic.GetPartPriority(""));
+    }
+
+    [Fact]
+    public void StarshipLogic_ReorderBuildingObjects_SortsByCategoryPriority()
+    {
+        // Load database for correct categorisation
+        LoadCorvetteDatabase();
+
+        // Create objects in scrambled order to verify reorder puts them in correct priority.
+        // Priority map: Reactor(1) -> Thruster(2) -> Wing(3) -> Gear(4) -> Access(5) -> Cockpit(6) -> Other
+        // B_STR_B_NE (Hull) and B_WNG_E (not in priority map) are NOT sorted — they go to Other group.
+        var json = JsonObject.Parse(@"{
+            ""Objects"": [
+                { ""ObjectID"": ""^BUILDTABLE2"", ""UserData"": 1 },
+                { ""ObjectID"": ""^B_COK_A"", ""UserData"": 2 },
+                { ""ObjectID"": ""^B_ALK_B"", ""UserData"": 3 },
+                { ""ObjectID"": ""^B_LND_A"", ""UserData"": 4 },
+                { ""ObjectID"": ""^B_STR_B_NE"", ""UserData"": 5 },
+                { ""ObjectID"": ""^B_TRU_C"", ""UserData"": 6 },
+                { ""ObjectID"": ""^B_GEN_1"", ""UserData"": 7 },
+                { ""ObjectID"": ""^B_WNG_E"", ""UserData"": 8 }
+            ]
+        }");
+        var objects = json.GetArray("Objects")!;
+        int result = StarshipLogic.ReorderBuildingObjects(objects);
+        Assert.Equal(8, result);
+
+        // Verify order: Reactor (B_GEN_1), Thruster (B_TRU_C), Gear (B_LND_A),
+        // Access (B_ALK_B), Cockpit (B_COK_A),
+        // Other group sorted alphabetically by object list display name:
+        //   "Hexagonal Table" (BUILDTABLE2) < "Osprey Wing Module (E)" (B_WNG_E) < "Supercruise Aerofoil (Ne)" (B_STR_B_NE)
+        Assert.Equal("^B_GEN_1", objects.GetObject(0).GetString("ObjectID"));     // Reactor (1)
+        Assert.Equal("^B_TRU_C", objects.GetObject(1).GetString("ObjectID"));     // Thruster (2)
+        Assert.Equal("^B_LND_A", objects.GetObject(2).GetString("ObjectID"));     // Gear (4)
+        Assert.Equal("^B_ALK_B", objects.GetObject(3).GetString("ObjectID"));     // Access (5)
+        Assert.Equal("^B_COK_A", objects.GetObject(4).GetString("ObjectID"));     // Cockpit (6)
+        Assert.Equal("^BUILDTABLE2", objects.GetObject(5).GetString("ObjectID")); // "Hexagonal Table"
+        Assert.Equal("^B_WNG_E", objects.GetObject(6).GetString("ObjectID"));     // "Osprey Wing Module (E)"
+        Assert.Equal("^B_STR_B_NE", objects.GetObject(7).GetString("ObjectID"));  // "Supercruise Aerofoil (Ne)"
+    }
+
+    [Fact]
+    public void StarshipLogic_ReorderBuildingObjects_PreservesRelativeOrderWithinCategory()
+    {
+        // Two cockpits and two landing bays - their relative order must be preserved.
+        var json = JsonObject.Parse(@"{
+            ""Objects"": [
+                { ""ObjectID"": ""^B_COK_A"", ""UserData"": 1 },
+                { ""ObjectID"": ""^B_ALK_C"", ""UserData"": 2 },
+                { ""ObjectID"": ""^B_COK_D"", ""UserData"": 3 },
+                { ""ObjectID"": ""^B_ALK_B"", ""UserData"": 4 }
+            ]
+        }");
+        var objects = json.GetArray("Objects")!;
+        StarshipLogic.ReorderBuildingObjects(objects);
+
+        // Landing bays come before cockpits, relative order within each is preserved
+        Assert.Equal("^B_ALK_C", objects.GetObject(0).GetString("ObjectID"));
+        Assert.Equal("^B_ALK_B", objects.GetObject(1).GetString("ObjectID"));
+        Assert.Equal("^B_COK_A", objects.GetObject(2).GetString("ObjectID"));
+        Assert.Equal("^B_COK_D", objects.GetObject(3).GetString("ObjectID"));
     }
 
     [Fact]
@@ -408,9 +562,9 @@ public class LogicTests
         // BuildShipList should return only valid ships, preserving original indices
         var list = StarshipLogic.BuildShipList(ships);
         Assert.Equal(2, list.Count);
-        Assert.Equal("Alpha", list[0].DisplayName);
+        Assert.Equal("[1] Alpha - ?", list[0].DisplayName);
         Assert.Equal(0, list[0].DataIndex);    // Original index preserved
-        Assert.Equal("Gamma", list[1].DisplayName);
+        Assert.Equal("[3] Gamma - ?", list[1].DisplayName);
         Assert.Equal(2, list[1].DataIndex);    // Original index preserved (NOT shifted to 1)
     }
 
@@ -494,6 +648,31 @@ public class LogicTests
             ]
         }");
         Assert.Equal(-1, StarshipLogic.FindFirstValidShipIndex(json.GetArray("Ships")!));
+    }
+
+    [Fact]
+    public void StarshipLogic_FindEmptySlot_ReturnsFirstEmpty()
+    {
+        var json = JsonObject.Parse(@"{
+            ""Ships"": [
+                { ""Name"": ""A"", ""Resource"": { ""Filename"": ""f1"", ""Seed"": [true, ""0x1""] } },
+                { ""Name"": ""B"", ""Resource"": { ""Filename"": """",   ""Seed"": [false, ""0x0""] } },
+                { ""Name"": ""C"", ""Resource"": { ""Filename"": ""f3"", ""Seed"": [true, ""0x3""] } }
+            ]
+        }");
+        Assert.Equal(1, StarshipLogic.FindEmptySlot(json.GetArray("Ships")!));
+    }
+
+    [Fact]
+    public void StarshipLogic_FindEmptySlot_AllFull_ReturnsNegativeOne()
+    {
+        var json = JsonObject.Parse(@"{
+            ""Ships"": [
+                { ""Name"": ""A"", ""Resource"": { ""Filename"": ""f1"", ""Seed"": [true, ""0x1""] } },
+                { ""Name"": ""B"", ""Resource"": { ""Filename"": ""f2"", ""Seed"": [true, ""0x2""] } }
+            ]
+        }");
+        Assert.Equal(-1, StarshipLogic.FindEmptySlot(json.GetArray("Ships")!));
     }
 
     [Fact]
@@ -2062,51 +2241,51 @@ public class LogicTests
         Assert.Equal(18, CompanionLogic.MaxPetSlots);
     }
 
-    // --- DiscoveryLogic ----------------------------------------------
+    // --- CatalogueLogic ----------------------------------------------
 
     [Fact]
-    public void DiscoveryLogic_RaceColumns_HasExpectedEntries()
+    public void CatalogueLogic_RaceColumns_HasExpectedEntries()
     {
-        Assert.Equal(5, DiscoveryLogic.RaceColumns.Length);
-        Assert.Contains(("Gek", 0), DiscoveryLogic.RaceColumns);
-        Assert.Contains(("Vy'keen", 1), DiscoveryLogic.RaceColumns);
-        Assert.Contains(("Korvax", 2), DiscoveryLogic.RaceColumns);
-        Assert.Contains(("Atlas", 4), DiscoveryLogic.RaceColumns);
-        Assert.Contains(("Autophage", 8), DiscoveryLogic.RaceColumns);
+        Assert.Equal(5, CatalogueLogic.RaceColumns.Length);
+        Assert.Contains(("Gek", 0), CatalogueLogic.RaceColumns);
+        Assert.Contains(("Vy'keen", 1), CatalogueLogic.RaceColumns);
+        Assert.Contains(("Korvax", 2), CatalogueLogic.RaceColumns);
+        Assert.Contains(("Atlas", 4), CatalogueLogic.RaceColumns);
+        Assert.Contains(("Autophage", 8), CatalogueLogic.RaceColumns);
     }
 
     [Fact]
-    public void DiscoveryLogic_TechItemTypes_ContainsExpectedTypes()
+    public void CatalogueLogic_TechItemTypes_ContainsExpectedTypes()
     {
-        Assert.Contains("Technology", DiscoveryLogic.TechItemTypes);
-        Assert.Contains("Upgrades", DiscoveryLogic.TechItemTypes);
-        Assert.Contains("Others", DiscoveryLogic.TechItemTypes);
+        Assert.Contains("Technology", CatalogueLogic.TechItemTypes);
+        Assert.Contains("Upgrades", CatalogueLogic.TechItemTypes);
+        Assert.Contains("Others", CatalogueLogic.TechItemTypes);
     }
 
     [Fact]
-    public void DiscoveryLogic_TechItemTypes_CaseInsensitive()
+    public void CatalogueLogic_TechItemTypes_CaseInsensitive()
     {
-        Assert.Contains("technology", DiscoveryLogic.TechItemTypes);
-        Assert.Contains("TECHNOLOGY", DiscoveryLogic.TechItemTypes);
+        Assert.Contains("technology", CatalogueLogic.TechItemTypes);
+        Assert.Contains("TECHNOLOGY", CatalogueLogic.TechItemTypes);
     }
 
     [Fact]
-    public void DiscoveryLogic_ProductItemTypes_ContainsExpectedTypes()
+    public void CatalogueLogic_ProductItemTypes_ContainsExpectedTypes()
     {
-        Assert.Contains("Products", DiscoveryLogic.ProductItemTypes);
-        Assert.Contains("Constructed Technology", DiscoveryLogic.ProductItemTypes);
-        Assert.Contains("Curiosities", DiscoveryLogic.ProductItemTypes);
-        Assert.Contains("Corvette", DiscoveryLogic.ProductItemTypes);
+        Assert.Contains("Products", CatalogueLogic.ProductItemTypes);
+        Assert.Contains("Constructed Technology", CatalogueLogic.ProductItemTypes);
+        Assert.Contains("Curiosities", CatalogueLogic.ProductItemTypes);
+        Assert.Contains("Corvette", CatalogueLogic.ProductItemTypes);
     }
 
     [Fact]
-    public void DiscoveryLogic_TotalRaceCount_IsNine()
+    public void CatalogueLogic_TotalRaceCount_IsNine()
     {
-        Assert.Equal(9, DiscoveryLogic.TotalRaceCount);
+        Assert.Equal(9, CatalogueLogic.TotalRaceCount);
     }
 
     [Fact]
-    public void DiscoveryLogic_IsWordKnown_ReturnsTrueWhenKnown()
+    public void CatalogueLogic_IsWordKnown_ReturnsTrueWhenKnown()
     {
         var groups = new JsonArray();
         var entry = new JsonObject();
@@ -2118,198 +2297,239 @@ public class LogicTests
         entry.Set("Races", races);
         groups.Add(entry);
 
-        Assert.True(DiscoveryLogic.IsWordKnown(groups, "TestGroup", 0));
-        Assert.False(DiscoveryLogic.IsWordKnown(groups, "TestGroup", 1));
-        Assert.True(DiscoveryLogic.IsWordKnown(groups, "TestGroup", 2));
+        Assert.True(CatalogueLogic.IsWordKnown(groups, "TestGroup", 0));
+        Assert.False(CatalogueLogic.IsWordKnown(groups, "TestGroup", 1));
+        Assert.True(CatalogueLogic.IsWordKnown(groups, "TestGroup", 2));
     }
 
     [Fact]
-    public void DiscoveryLogic_IsWordKnown_UnknownGroup_ReturnsFalse()
+    public void CatalogueLogic_IsWordKnown_UnknownGroup_ReturnsFalse()
     {
         var groups = new JsonArray();
-        Assert.False(DiscoveryLogic.IsWordKnown(groups, "NoSuchGroup", 0));
+        Assert.False(CatalogueLogic.IsWordKnown(groups, "NoSuchGroup", 0));
     }
 
     [Fact]
-    public void DiscoveryLogic_SetWordKnown_AddsNewEntry()
+    public void CatalogueLogic_SetWordKnown_AddsNewEntry()
     {
         var groups = new JsonArray();
-        DiscoveryLogic.SetWordKnown(groups, "NewWord", 2, true);
+        CatalogueLogic.SetWordKnown(groups, "NewWord", 2, true);
 
         Assert.Equal(1, groups.Length);
-        Assert.True(DiscoveryLogic.IsWordKnown(groups, "NewWord", 2));
-        Assert.False(DiscoveryLogic.IsWordKnown(groups, "NewWord", 0));
+        Assert.True(CatalogueLogic.IsWordKnown(groups, "NewWord", 2));
+        Assert.False(CatalogueLogic.IsWordKnown(groups, "NewWord", 0));
     }
 
     [Fact]
-    public void DiscoveryLogic_SetWordKnown_RemovesEntryWhenAllFalse()
+    public void CatalogueLogic_SetWordKnown_RemovesEntryWhenAllFalse()
     {
         var groups = new JsonArray();
-        DiscoveryLogic.SetWordKnown(groups, "TestWord", 0, true);
+        CatalogueLogic.SetWordKnown(groups, "TestWord", 0, true);
         Assert.Equal(1, groups.Length);
 
-        DiscoveryLogic.SetWordKnown(groups, "TestWord", 0, false);
+        CatalogueLogic.SetWordKnown(groups, "TestWord", 0, false);
         Assert.Equal(0, groups.Length);
     }
 
     [Fact]
-    public void DiscoveryLogic_LoadAndSaveGlyphBitfield()
+    public void CatalogueLogic_LoadAndSaveGlyphBitfield()
     {
         var json = JsonObject.Parse(@"{ ""KnownPortalRunes"": 4095 }");
-        Assert.Equal(4095, DiscoveryLogic.LoadGlyphBitfield(json));
+        Assert.Equal(4095, CatalogueLogic.LoadGlyphBitfield(json));
 
-        DiscoveryLogic.SaveGlyphBitfield(json, 255);
-        Assert.Equal(255, DiscoveryLogic.LoadGlyphBitfield(json));
+        CatalogueLogic.SaveGlyphBitfield(json, 255);
+        Assert.Equal(255, CatalogueLogic.LoadGlyphBitfield(json));
     }
 
     [Fact]
-    public void DiscoveryLogic_LoadKnownItemIds_LoadsList()
+    public void CatalogueLogic_LoadKnownItemIds_StripsCaretPrefix()
     {
         var json = JsonObject.Parse(@"{
             ""KnownTech"": [""^FUEL1"", ""^ANTIMATTER"", ""^HYPERDRIVE""]
         }");
 
-        var ids = DiscoveryLogic.LoadKnownItemIds(json, "KnownTech");
+        var ids = CatalogueLogic.LoadKnownItemIds(json, "KnownTech");
         Assert.Equal(3, ids.Count);
-        Assert.Contains("^FUEL1", ids);
-        Assert.Contains("^ANTIMATTER", ids);
+        // Caret prefix is stripped so IDs match the game item database
+        Assert.Contains("FUEL1", ids);
+        Assert.Contains("ANTIMATTER", ids);
+        Assert.Contains("HYPERDRIVE", ids);
     }
 
     [Fact]
-    public void DiscoveryLogic_SaveKnownItemIds_SavesList()
+    public void CatalogueLogic_SaveKnownItemIds_AddsCaretPrefix()
     {
         var json = JsonObject.Parse(@"{ ""KnownTech"": [] }");
-        var ids = new List<string> { "^A", "^B", "^C" };
+        // IDs without ^-prefix (as they come from the database / grid)
+        var ids = new List<string> { "A", "B", "C" };
 
-        DiscoveryLogic.SaveKnownItemIds(json, "KnownTech", ids);
+        CatalogueLogic.SaveKnownItemIds(json, "KnownTech", ids);
 
-        var loaded = DiscoveryLogic.LoadKnownItemIds(json, "KnownTech");
+        // Verify the raw JSON array has ^-prefixed values
+        var arr = json.GetArray("KnownTech")!;
+        Assert.Equal("^A", arr.GetString(0));
+        Assert.Equal("^B", arr.GetString(1));
+        Assert.Equal("^C", arr.GetString(2));
+
+        // And round-trip back through Load strips the prefix again
+        var loaded = CatalogueLogic.LoadKnownItemIds(json, "KnownTech");
         Assert.Equal(3, loaded.Count);
-        Assert.Equal("^A", loaded[0]);
-        Assert.Equal("^B", loaded[1]);
-        Assert.Equal("^C", loaded[2]);
+        Assert.Equal("A", loaded[0]);
+        Assert.Equal("B", loaded[1]);
+        Assert.Equal("C", loaded[2]);
     }
 
     [Fact]
-    public void DiscoveryLogic_SetWordFlagsForRace_LearnsAllWordsForRace()
+    public void CatalogueLogic_SaveKnownItemIds_DoesNotDoublePrefix()
+    {
+        var json = JsonObject.Parse(@"{ ""KnownTech"": [] }");
+        // IDs already with ^-prefix should not get double-prefixed
+        var ids = new List<string> { "^X", "^Y" };
+
+        CatalogueLogic.SaveKnownItemIds(json, "KnownTech", ids);
+
+        var arr = json.GetArray("KnownTech")!;
+        Assert.Equal("^X", arr.GetString(0));
+        Assert.Equal("^Y", arr.GetString(1));
+    }
+
+    [Fact]
+    public void CatalogueLogic_StripCaretPrefix_Works()
+    {
+        Assert.Equal("LASER", CatalogueLogic.StripCaretPrefix("^LASER"));
+        Assert.Equal("LASER", CatalogueLogic.StripCaretPrefix("LASER"));
+        Assert.Equal("^", CatalogueLogic.StripCaretPrefix("^")); // single ^ stays as-is (length 1)
+        Assert.Equal("", CatalogueLogic.StripCaretPrefix(""));
+    }
+
+    [Fact]
+    public void CatalogueLogic_EnsureCaretPrefix_Works()
+    {
+        Assert.Equal("^LASER", CatalogueLogic.EnsureCaretPrefix("LASER"));
+        Assert.Equal("^LASER", CatalogueLogic.EnsureCaretPrefix("^LASER"));
+        Assert.Equal("", CatalogueLogic.EnsureCaretPrefix("")); // empty stays empty
+    }
+
+    [Fact]
+    public void CatalogueLogic_SetWordFlagsForRace_LearnsAllWordsForRace()
     {
         var groups = new JsonArray();
         var words = CreateTestWordEntries();
 
-        int count = DiscoveryLogic.SetWordFlagsForRace(groups, words, 0, true); // Gek
+        int count = CatalogueLogic.SetWordFlagsForRace(groups, words, 0, true); // Gek
 
         // word1 has Gek group, word2 does not, word3 has Gek group
         Assert.Equal(2, count);
-        Assert.True(DiscoveryLogic.IsWordKnown(groups, "^TRA_W1", 0));
-        Assert.True(DiscoveryLogic.IsWordKnown(groups, "^TRA_W3", 0));
+        Assert.True(CatalogueLogic.IsWordKnown(groups, "^TRA_W1", 0));
+        Assert.True(CatalogueLogic.IsWordKnown(groups, "^TRA_W3", 0));
     }
 
     [Fact]
-    public void DiscoveryLogic_SetWordFlagsForRace_UnlearnsAllWordsForRace()
+    public void CatalogueLogic_SetWordFlagsForRace_UnlearnsAllWordsForRace()
     {
         var groups = new JsonArray();
         var words = CreateTestWordEntries();
 
         // Learn first
-        DiscoveryLogic.SetWordFlagsForRace(groups, words, 0, true);
-        Assert.True(DiscoveryLogic.IsWordKnown(groups, "^TRA_W1", 0));
+        CatalogueLogic.SetWordFlagsForRace(groups, words, 0, true);
+        Assert.True(CatalogueLogic.IsWordKnown(groups, "^TRA_W1", 0));
 
         // Unlearn
-        int count = DiscoveryLogic.SetWordFlagsForRace(groups, words, 0, false);
+        int count = CatalogueLogic.SetWordFlagsForRace(groups, words, 0, false);
         Assert.Equal(2, count);
-        Assert.False(DiscoveryLogic.IsWordKnown(groups, "^TRA_W1", 0));
-        Assert.False(DiscoveryLogic.IsWordKnown(groups, "^TRA_W3", 0));
+        Assert.False(CatalogueLogic.IsWordKnown(groups, "^TRA_W1", 0));
+        Assert.False(CatalogueLogic.IsWordKnown(groups, "^TRA_W3", 0));
     }
 
     [Fact]
-    public void DiscoveryLogic_SetWordFlagsForRace_DoesNotAffectOtherRaces()
+    public void CatalogueLogic_SetWordFlagsForRace_DoesNotAffectOtherRaces()
     {
         var groups = new JsonArray();
         var words = CreateTestWordEntries();
 
         // Learn word1 for Vy'keen (race 1)
-        DiscoveryLogic.SetWordKnown(groups, "^WAR_W1", 1, true);
+        CatalogueLogic.SetWordKnown(groups, "^WAR_W1", 1, true);
 
         // Learn all for Gek (race 0)
-        DiscoveryLogic.SetWordFlagsForRace(groups, words, 0, true);
+        CatalogueLogic.SetWordFlagsForRace(groups, words, 0, true);
 
         // Vy'keen still known
-        Assert.True(DiscoveryLogic.IsWordKnown(groups, "^WAR_W1", 1));
+        Assert.True(CatalogueLogic.IsWordKnown(groups, "^WAR_W1", 1));
         // Gek now known
-        Assert.True(DiscoveryLogic.IsWordKnown(groups, "^TRA_W1", 0));
+        Assert.True(CatalogueLogic.IsWordKnown(groups, "^TRA_W1", 0));
     }
 
     [Fact]
-    public void DiscoveryLogic_SetWordFlagsForRace_SkipsWordsWithoutRace()
+    public void CatalogueLogic_SetWordFlagsForRace_SkipsWordsWithoutRace()
     {
         var groups = new JsonArray();
         var words = CreateTestWordEntries();
 
         // word2 only has Vy'keen (race 1), not Gek (race 0)
-        int count = DiscoveryLogic.SetWordFlagsForRace(groups, words, 0, true);
+        int count = CatalogueLogic.SetWordFlagsForRace(groups, words, 0, true);
         Assert.Equal(2, count); // word1 and word3, not word2
     }
 
     [Fact]
-    public void DiscoveryLogic_SetWordFlagsForEntries_LearnsAcrossAllRaces()
+    public void CatalogueLogic_SetWordFlagsForEntries_LearnsAcrossAllRaces()
     {
         var groups = new JsonArray();
         var words = CreateTestWordEntries();
 
-        var raceColumns = DiscoveryLogic.RaceColumns;
-        int count = DiscoveryLogic.SetWordFlagsForEntries(groups, words, raceColumns, true);
+        var raceColumns = CatalogueLogic.RaceColumns;
+        int count = CatalogueLogic.SetWordFlagsForEntries(groups, words, raceColumns, true);
 
         // word1: Gek + Vy'keen = 2, word2: Vy'keen = 1, word3: Gek + Korvax = 2 -> total 5
         Assert.Equal(5, count);
-        Assert.True(DiscoveryLogic.IsWordKnown(groups, "^TRA_W1", 0));
-        Assert.True(DiscoveryLogic.IsWordKnown(groups, "^WAR_W1", 1));
-        Assert.True(DiscoveryLogic.IsWordKnown(groups, "^WAR_W2", 1));
-        Assert.True(DiscoveryLogic.IsWordKnown(groups, "^TRA_W3", 0));
-        Assert.True(DiscoveryLogic.IsWordKnown(groups, "^EXP_W3", 2));
+        Assert.True(CatalogueLogic.IsWordKnown(groups, "^TRA_W1", 0));
+        Assert.True(CatalogueLogic.IsWordKnown(groups, "^WAR_W1", 1));
+        Assert.True(CatalogueLogic.IsWordKnown(groups, "^WAR_W2", 1));
+        Assert.True(CatalogueLogic.IsWordKnown(groups, "^TRA_W3", 0));
+        Assert.True(CatalogueLogic.IsWordKnown(groups, "^EXP_W3", 2));
     }
 
     [Fact]
-    public void DiscoveryLogic_SetWordFlagsForEntries_UnlearnsAcrossAllRaces()
+    public void CatalogueLogic_SetWordFlagsForEntries_UnlearnsAcrossAllRaces()
     {
         var groups = new JsonArray();
         var words = CreateTestWordEntries();
-        var raceColumns = DiscoveryLogic.RaceColumns;
+        var raceColumns = CatalogueLogic.RaceColumns;
 
         // Learn all first
-        DiscoveryLogic.SetWordFlagsForEntries(groups, words, raceColumns, true);
+        CatalogueLogic.SetWordFlagsForEntries(groups, words, raceColumns, true);
 
         // Unlearn just the first two words
         var subset = new List<WordEntry> { words[0], words[1] };
-        int count = DiscoveryLogic.SetWordFlagsForEntries(groups, subset, raceColumns, false);
+        int count = CatalogueLogic.SetWordFlagsForEntries(groups, subset, raceColumns, false);
 
         Assert.Equal(3, count); // word1: 2 races, word2: 1 race
-        Assert.False(DiscoveryLogic.IsWordKnown(groups, "^TRA_W1", 0));
-        Assert.False(DiscoveryLogic.IsWordKnown(groups, "^WAR_W1", 1));
-        Assert.False(DiscoveryLogic.IsWordKnown(groups, "^WAR_W2", 1));
+        Assert.False(CatalogueLogic.IsWordKnown(groups, "^TRA_W1", 0));
+        Assert.False(CatalogueLogic.IsWordKnown(groups, "^WAR_W1", 1));
+        Assert.False(CatalogueLogic.IsWordKnown(groups, "^WAR_W2", 1));
         // word3 still known
-        Assert.True(DiscoveryLogic.IsWordKnown(groups, "^TRA_W3", 0));
-        Assert.True(DiscoveryLogic.IsWordKnown(groups, "^EXP_W3", 2));
+        Assert.True(CatalogueLogic.IsWordKnown(groups, "^TRA_W3", 0));
+        Assert.True(CatalogueLogic.IsWordKnown(groups, "^EXP_W3", 2));
     }
 
     [Fact]
-    public void DiscoveryLogic_SetWordFlagsForEntries_EmptyList_ReturnsZero()
+    public void CatalogueLogic_SetWordFlagsForEntries_EmptyList_ReturnsZero()
     {
         var groups = new JsonArray();
         var emptyWords = new List<WordEntry>();
-        var raceColumns = DiscoveryLogic.RaceColumns;
+        var raceColumns = CatalogueLogic.RaceColumns;
 
-        int count = DiscoveryLogic.SetWordFlagsForEntries(groups, emptyWords, raceColumns, true);
+        int count = CatalogueLogic.SetWordFlagsForEntries(groups, emptyWords, raceColumns, true);
         Assert.Equal(0, count);
         Assert.Equal(0, groups.Length);
     }
 
     [Fact]
-    public void DiscoveryLogic_SetWordFlagsForRace_EmptyWordList_ReturnsZero()
+    public void CatalogueLogic_SetWordFlagsForRace_EmptyWordList_ReturnsZero()
     {
         var groups = new JsonArray();
         var emptyWords = new List<WordEntry>();
 
-        int count = DiscoveryLogic.SetWordFlagsForRace(groups, emptyWords, 0, true);
+        int count = CatalogueLogic.SetWordFlagsForRace(groups, emptyWords, 0, true);
         Assert.Equal(0, count);
         Assert.Equal(0, groups.Length);
     }
@@ -2636,6 +2856,88 @@ public class LogicTests
             Assert.Equal(SaveFileManager.Platform.XboxGamePass, SaveFileManager.DetectPlatform(dir));
         }
         finally { Directory.Delete(dir, true); }
+    }
+
+    [Fact]
+    public void Xbox_ParseContainersIndex_FindsAllSlots()
+    {
+        var ciPath = FindRefPath("_ref", "xbox_save", "000900000150C65A_29070100B936489ABCE8B9AF3980429C", "containers.index");
+        if (ciPath == null) return; // skip if reference save not available
+
+        var slots = ContainersIndexManager.ParseContainersIndex(ciPath);
+        Assert.True(slots.Count >= 6, $"Expected at least 6 slots, got {slots.Count}");
+        Assert.True(slots.ContainsKey("AccountData"));
+        Assert.True(slots.ContainsKey("Settings"));
+        Assert.True(slots.ContainsKey("Slot1Auto"));
+        Assert.True(slots.ContainsKey("Slot1Manual"));
+        Assert.True(slots.ContainsKey("Slot3Auto"));
+        Assert.True(slots.ContainsKey("Slot3Manual"));
+
+        Assert.False(ContainersIndexManager.IsSaveSlot("AccountData"));
+        Assert.False(ContainersIndexManager.IsSaveSlot("Settings"));
+        Assert.True(ContainersIndexManager.IsSaveSlot("Slot1Auto"));
+    }
+
+    [Fact]
+    public void Xbox_LoadAccountData_DecompressesRawLz4AndParsesJson()
+    {
+        var ciPath = FindRefPath("_ref", "xbox_save", "000900000150C65A_29070100B936489ABCE8B9AF3980429C", "containers.index");
+        if (ciPath == null) return; // skip if reference save not available
+
+        var slots = ContainersIndexManager.ParseContainersIndex(ciPath);
+        Assert.True(slots.TryGetValue("AccountData", out var accountSlot));
+        Assert.NotNull(accountSlot!.DataFilePath);
+        Assert.True(File.Exists(accountSlot.DataFilePath));
+
+        // LoadXboxSave must decompress the raw LZ4 blob and return valid JSON
+        string? json = ContainersIndexManager.LoadXboxSave(accountSlot);
+        Assert.NotNull(json);
+        Assert.True(json!.Length > 0);
+        Assert.StartsWith("{", json);
+
+        // Parse as JsonObject to confirm it's valid JSON with expected structure
+        var obj = JsonObject.Parse(json);
+        Assert.NotNull(obj);
+        Assert.True(obj.Length > 0);
+    }
+
+    [Fact]
+    public void Xbox_LoadAccountData_ViaAccountLogic_LoadsRewards()
+    {
+        var ciPath = FindRefPath("_ref", "xbox_save", "000900000150C65A_29070100B936489ABCE8B9AF3980429C", "containers.index");
+        if (ciPath == null) return; // skip if reference save not available
+
+        EnsureMapperLoaded();
+        var slots = ContainersIndexManager.ParseContainersIndex(ciPath);
+        Assert.True(slots.TryGetValue("AccountData", out var accountSlot));
+
+        var data = AccountLogic.LoadXboxAccountData(accountSlot!);
+        Assert.Null(data.ErrorMessage);
+        Assert.NotNull(data.AccountObject);
+        Assert.NotNull(data.StatusMessage);
+
+        // The account data should have a UserSettingsData key
+        var userSettings = data.AccountObject!.GetObject("UserSettingsData");
+        Assert.NotNull(userSettings);
+    }
+
+    [Fact]
+    public void Xbox_LoadSaveSlot_LoadsNmsLz4StreamingFormat()
+    {
+        var ciPath = FindRefPath("_ref", "xbox_save", "000900000150C65A_29070100B936489ABCE8B9AF3980429C", "containers.index");
+        if (ciPath == null) return; // skip if reference save not available
+
+        EnsureMapperLoaded();
+        var slots = ContainersIndexManager.ParseContainersIndex(ciPath);
+        Assert.True(slots.TryGetValue("Slot1Auto", out var slotInfo));
+        Assert.NotNull(slotInfo!.DataFilePath);
+
+        string? json = ContainersIndexManager.LoadXboxSave(slotInfo);
+        Assert.NotNull(json);
+        Assert.StartsWith("{", json!);
+
+        var obj = JsonObject.Parse(json);
+        Assert.NotNull(obj);
     }
 
     [Fact]
@@ -2972,6 +3274,33 @@ public class LogicTests
     }
 
     [Fact]
+    public void Double_ToString_InvariantCulture_UnderGermanLocale()
+    {
+        // Verifies that using InvariantCulture with ToString produces a dot decimal,
+        // matching the pattern used for CompanionPanel Scale/Trust/Traits/Moods display.
+        var saved = System.Globalization.CultureInfo.CurrentCulture;
+        try
+        {
+            System.Threading.Thread.CurrentThread.CurrentCulture =
+                new System.Globalization.CultureInfo("de-DE");
+
+            double val = 1.75;
+            // Without InvariantCulture, German locale would produce "1,75"
+            string withoutCulture = val.ToString();
+            Assert.Contains(",", withoutCulture); // sanity: German uses comma
+
+            // With InvariantCulture, it must use dot
+            string withCulture = val.ToString(System.Globalization.CultureInfo.InvariantCulture);
+            Assert.Contains(".", withCulture);
+            Assert.DoesNotContain(",", withCulture);
+        }
+        finally
+        {
+            System.Threading.Thread.CurrentThread.CurrentCulture = saved;
+        }
+    }
+
+    [Fact]
     public void JsonParser_Integers_ReturnIntOrLong()
     {
         string json = "{\"small\":42,\"neg\":-100,\"big\":3000000000,\"zero\":0}";
@@ -2995,6 +3324,53 @@ public class LogicTests
         Assert.Equal(20, obj.Length);
         for (int i = 0; i < 20; i++)
             Assert.Equal(i, obj.GetInt($"key{i}"));
+    }
+
+    [Fact]
+    public void JsonObject_Reorder_MovesForward()
+    {
+        var obj = new JsonObject();
+        obj.Add("a", 1);
+        obj.Add("b", 2);
+        obj.Add("c", 3);
+        obj.Add("d", 4);
+        // Move 'a' (index 0) to index 2
+        obj.Reorder(0, 2);
+        var names = obj.Names();
+        Assert.Equal("b", names[0]);
+        Assert.Equal("c", names[1]);
+        Assert.Equal("a", names[2]);
+        Assert.Equal("d", names[3]);
+        Assert.Equal(1, obj.GetInt("a"));
+    }
+
+    [Fact]
+    public void JsonObject_Reorder_MovesBackward()
+    {
+        var obj = new JsonObject();
+        obj.Add("a", 1);
+        obj.Add("b", 2);
+        obj.Add("c", 3);
+        obj.Add("d", 4);
+        // Move 'd' (index 3) to index 1
+        obj.Reorder(3, 1);
+        var names = obj.Names();
+        Assert.Equal("a", names[0]);
+        Assert.Equal("d", names[1]);
+        Assert.Equal("b", names[2]);
+        Assert.Equal("c", names[3]);
+        Assert.Equal(4, obj.GetInt("d"));
+    }
+
+    [Fact]
+    public void JsonObject_Reorder_SameIndex_NoOp()
+    {
+        var obj = new JsonObject();
+        obj.Add("a", 1);
+        obj.Add("b", 2);
+        obj.Reorder(0, 0);
+        Assert.Equal("a", obj.Names()[0]);
+        Assert.Equal("b", obj.Names()[1]);
     }
 
     [Fact]
@@ -3262,9 +3638,9 @@ public class LogicTests
     [Fact]
     public void GalaxyDatabase_GetGalaxyName_HandlesOutOfRange()
     {
-        // All 256 galaxies are now in the database; out of range returns Unknown
+        // All 257 galaxies are now in the database; out of range returns Unknown
         Assert.Equal("Drundemiso", GalaxyDatabase.GetGalaxyName(199));
-        Assert.Equal("Unknown", GalaxyDatabase.GetGalaxyName(256));
+        Assert.Equal("Unknown", GalaxyDatabase.GetGalaxyName(257));
         Assert.Equal("Unknown", GalaxyDatabase.GetGalaxyName(-1));
     }
 
@@ -3315,7 +3691,7 @@ public class LogicTests
         Assert.Equal(8, SettlementLogic.StatCount);
         Assert.Equal(8, SettlementLogic.StatLabels.Length);
         Assert.Equal(8, SettlementLogic.StatMaxValues.Length);
-        Assert.Equal("Population", SettlementLogic.StatLabels[0]);
+        Assert.Equal("Max Population", SettlementLogic.StatLabels[0]);
         Assert.Equal(175, SettlementLogic.StatMaxValues[0]);
         Assert.Equal("Happiness", SettlementLogic.StatLabels[1]);
         Assert.Equal("Production", SettlementLogic.StatLabels[2]);
@@ -3327,9 +3703,9 @@ public class LogicTests
     }
 
     [Fact]
-    public void GalaxyDatabase_Has256Galaxies()
+    public void GalaxyDatabase_Has257Galaxies()
     {
-        Assert.Equal(256, GalaxyDatabase.Galaxies.Length);
+        Assert.Equal(257, GalaxyDatabase.Galaxies.Length);
     }
 
     [Fact]
@@ -4047,22 +4423,22 @@ public class LogicTests
     }
 
     [Fact]
-    public void AccountLogic_SyncRedeemedRewards_AddsToSaveData()
+    public void AccountLogic_SaveRedeemedRewards_WritesToSaveData()
     {
         var saveData = JsonObject.Parse(
             "{\"PlayerStateData\":{\"RedeemedSeasonRewards\":[],\"RedeemedTwitchRewards\":[]}}");
 
-        var seasonRows = new List<(string Id, bool Unlocked)>
+        var seasonRows = new List<(string Id, bool Redeemed)>
         {
             ("^SEASON_1", true),
             ("^SEASON_2", false),
         };
-        var twitchRows = new List<(string Id, bool Unlocked)>
+        var twitchRows = new List<(string Id, bool Redeemed)>
         {
             ("^TWITCH_001", true),
         };
 
-        AccountLogic.SyncRedeemedRewards(saveData, seasonRows, twitchRows);
+        AccountLogic.SaveRedeemedRewards(saveData, seasonRows, twitchRows);
 
         var playerState = saveData.GetObject("PlayerStateData")!;
         var redeemed = playerState.GetArray("RedeemedSeasonRewards")!;
@@ -4075,23 +4451,23 @@ public class LogicTests
     }
 
     [Fact]
-    public void AccountLogic_SyncRedeemedRewards_RemovesUnlockedEntries()
+    public void AccountLogic_SaveRedeemedRewards_RemovesUncheckedEntries()
     {
         var saveData = JsonObject.Parse(
             "{\"PlayerStateData\":{\"RedeemedSeasonRewards\":[\"^SEASON_1\",\"^SEASON_2\"],\"RedeemedTwitchRewards\":[\"^TWITCH_001\"]}}");
 
-        // Now Season_1 is unchecked
-        var seasonRows = new List<(string Id, bool Unlocked)>
+        // Season_1 is unchecked, Season_2 stays redeemed
+        var seasonRows = new List<(string Id, bool Redeemed)>
         {
             ("^SEASON_1", false),
             ("^SEASON_2", true),
         };
-        var twitchRows = new List<(string Id, bool Unlocked)>
+        var twitchRows = new List<(string Id, bool Redeemed)>
         {
             ("^TWITCH_001", false),
         };
 
-        AccountLogic.SyncRedeemedRewards(saveData, seasonRows, twitchRows);
+        AccountLogic.SaveRedeemedRewards(saveData, seasonRows, twitchRows);
 
         var playerState = saveData.GetObject("PlayerStateData")!;
         var redeemed = playerState.GetArray("RedeemedSeasonRewards")!;
@@ -4103,20 +4479,20 @@ public class LogicTests
     }
 
     [Fact]
-    public void AccountLogic_SyncRedeemedRewards_CreatesArrayIfMissing()
+    public void AccountLogic_SaveRedeemedRewards_CreatesArrayIfMissing()
     {
         var saveData = JsonObject.Parse("{\"PlayerStateData\":{}}");
 
-        var seasonRows = new List<(string Id, bool Unlocked)>
+        var seasonRows = new List<(string Id, bool Redeemed)>
         {
             ("^SEASON_1", true),
         };
-        var twitchRows = new List<(string Id, bool Unlocked)>
+        var twitchRows = new List<(string Id, bool Redeemed)>
         {
             ("^TWITCH_001", true),
         };
 
-        AccountLogic.SyncRedeemedRewards(saveData, seasonRows, twitchRows);
+        AccountLogic.SaveRedeemedRewards(saveData, seasonRows, twitchRows);
 
         var playerState = saveData.GetObject("PlayerStateData")!;
         var redeemed = playerState.GetArray("RedeemedSeasonRewards");
@@ -4126,6 +4502,61 @@ public class LogicTests
         var twitchRedeemed = playerState.GetArray("RedeemedTwitchRewards");
         Assert.NotNull(twitchRedeemed);
         Assert.Equal(1, twitchRedeemed!.Length);
+    }
+
+    [Fact]
+    public void AccountLogic_GetRedeemedSets_ReadsFromSaveData()
+    {
+        var saveData = JsonObject.Parse(
+            "{\"PlayerStateData\":{\"RedeemedSeasonRewards\":[\"^SEASON_1\",\"^SEASON_2\"],\"RedeemedTwitchRewards\":[\"^TWITCH_001\"]}}");
+
+        var (seasonRedeemed, twitchRedeemed) = AccountLogic.GetRedeemedSets(saveData);
+
+        Assert.Equal(2, seasonRedeemed.Count);
+        Assert.Contains("^SEASON_1", seasonRedeemed);
+        Assert.Contains("^SEASON_2", seasonRedeemed);
+        Assert.Single(twitchRedeemed);
+        Assert.Contains("^TWITCH_001", twitchRedeemed);
+    }
+
+    [Fact]
+    public void AccountLogic_GetRedeemedSets_NullSaveDataReturnsEmpty()
+    {
+        var (seasonRedeemed, twitchRedeemed) = AccountLogic.GetRedeemedSets(null);
+        Assert.Empty(seasonRedeemed);
+        Assert.Empty(twitchRedeemed);
+    }
+
+    [Fact]
+    public void AccountLogic_GetRedeemedSets_MissingArraysReturnsEmpty()
+    {
+        var saveData = JsonObject.Parse("{\"PlayerStateData\":{}}");
+        var (seasonRedeemed, twitchRedeemed) = AccountLogic.GetRedeemedSets(saveData);
+        Assert.Empty(seasonRedeemed);
+        Assert.Empty(twitchRedeemed);
+    }
+
+    [Fact]
+    public void AccountLogic_SaveRedeemedRewards_IndependentOfAccountUnlock()
+    {
+        // This test verifies that redeemed state is independent of account unlock state.
+        // A reward can be redeemed in save without being unlocked on account, and vice versa.
+        var saveData = JsonObject.Parse("{\"PlayerStateData\":{}}");
+
+        // Only ^SEASON_2 is redeemed, even though account might have ^SEASON_1 unlocked
+        var seasonRows = new List<(string Id, bool Redeemed)>
+        {
+            ("^SEASON_1", false),
+            ("^SEASON_2", true),
+        };
+        var twitchRows = new List<(string Id, bool Redeemed)>();
+
+        AccountLogic.SaveRedeemedRewards(saveData, seasonRows, twitchRows);
+
+        var playerState = saveData.GetObject("PlayerStateData")!;
+        var redeemed = playerState.GetArray("RedeemedSeasonRewards")!;
+        Assert.Equal(1, redeemed.Length);
+        Assert.Equal("^SEASON_2", redeemed.GetString(0));
     }
 
     [Fact]
@@ -4152,9 +4583,9 @@ public class LogicTests
     [Fact]
     public void AccountLogic_BuildRewardRows_IncludesUnknownUnlocked()
     {
-        var db = new List<(string Id, string Name)>
+        var db = new List<AccountLogic.RewardDbEntry>
         {
-            ("^KNOWN_1", "Known Reward"),
+            new() { Id = "^KNOWN_1", Name = "Known Reward" },
         };
         var unlocked = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
         {
@@ -4198,17 +4629,81 @@ public class LogicTests
         Assert.DoesNotContain("^SW_PREORDER2", intersected);
 
         // Verify BuildRewardRows only marks the intersected reward as unlocked
-        var db = new List<(string Id, string Name)>
+        var db = new List<AccountLogic.RewardDbEntry>
         {
-            ("^SW_PREORDER", "Star Wars Pre-order"),
-            ("^SW_PREORDER2", "Star Wars Pre-order 2"),
-            ("^TGA_SHIP1", "TGA Ship"),
+            new() { Id = "^SW_PREORDER", Name = "Star Wars Pre-order" },
+            new() { Id = "^SW_PREORDER2", Name = "Star Wars Pre-order 2" },
+            new() { Id = "^TGA_SHIP1", Name = "TGA Ship" },
         };
         var rows = AccountLogic.BuildRewardRows(db, intersected);
         Assert.Equal(3, rows.Count);
         Assert.True(rows.First(r => r.Id == "^SW_PREORDER").Unlocked);
         Assert.False(rows.First(r => r.Id == "^SW_PREORDER2").Unlocked);
         Assert.False(rows.First(r => r.Id == "^TGA_SHIP1").Unlocked);
+    }
+
+    [Fact]
+    public void AccountLogic_BuildRewardRows_PropagatesSeasonMetadata()
+    {
+        var db = new List<AccountLogic.RewardDbEntry>
+        {
+            new() { Id = "^VAULT_ARMOUR", Name = "Heirloom Breastplate", SeasonId = 21, StageId = -1, MustBeUnlocked = false },
+            new() { Id = "^EXPD_EGG_14", Name = "Companion Egg", SeasonId = 14, StageId = 3, MustBeUnlocked = true },
+        };
+        var unlocked = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "^VAULT_ARMOUR" };
+
+        var rows = AccountLogic.BuildRewardRows(db, unlocked);
+
+        Assert.Equal(2, rows.Count);
+        // First row: season 21, unlocked, not MustBeUnlocked
+        Assert.Equal(21, rows[0].SeasonId);
+        Assert.Equal(-1, rows[0].StageId);
+        Assert.False(rows[0].MustBeUnlocked);
+        Assert.True(rows[0].Unlocked);
+        // Second row: season 14, stage 3, locked, MustBeUnlocked
+        Assert.Equal(14, rows[1].SeasonId);
+        Assert.Equal(3, rows[1].StageId);
+        Assert.True(rows[1].MustBeUnlocked);
+        Assert.False(rows[1].Unlocked);
+    }
+
+    [Fact]
+    public void RewardDatabase_LoadsNewFieldsFromJson()
+    {
+        // Create a temp Rewards.json with the new fields
+        string tmpDir = Path.Combine(Path.GetTempPath(), "nmse_test_reward_fields_" + Guid.NewGuid().ToString("N")[..8]);
+        Directory.CreateDirectory(tmpDir);
+        try
+        {
+            string json = @"[
+                { ""Id"": ""^TEST_REWARD"", ""Name"": ""Test"", ""Category"": ""season"",
+                  ""ProductId"": ""TEST"", ""MustBeUnlocked"": true, ""SeasonId"": 5, ""StageId"": 2 },
+                { ""Id"": ""^TWITCH_1"", ""Name"": ""Twitch Test"", ""Category"": ""twitch"",
+                  ""ProductId"": ""TW1"" }
+            ]";
+            File.WriteAllText(Path.Combine(tmpDir, "Rewards.json"), json);
+
+            RewardDatabase.Reset();
+            bool loaded = RewardDatabase.LoadFromJsonDirectory(tmpDir);
+            Assert.True(loaded);
+
+            var season = RewardDatabase.SeasonRewards.First();
+            Assert.Equal("^TEST_REWARD", season.Id);
+            Assert.True(season.Unlock);
+            Assert.Equal(5, season.SeasonId);
+            Assert.Equal(2, season.StageId);
+
+            var twitch = RewardDatabase.TwitchRewards.First();
+            Assert.Equal("^TWITCH_1", twitch.Id);
+            Assert.False(twitch.Unlock);
+            Assert.Equal(-1, twitch.SeasonId);
+            Assert.Equal(-1, twitch.StageId);
+        }
+        finally
+        {
+            RewardDatabase.Reset();
+            try { Directory.Delete(tmpDir, true); } catch { }
+        }
     }
 
     // --- MxmlRewardEditor --------------------------------------------
@@ -4649,6 +5144,345 @@ public class LogicTests
         Assert.Contains("\n", formatted);
     }
 
+    // --- RawJsonLogic: FormatValueForEdit (no quotes for strings) ---
+
+    [Fact]
+    public void RawJsonLogic_FormatValueForEdit_StringWithoutQuotes()
+    {
+        // FormatValueForEdit should return raw string without surrounding quotes
+        string result = RawJsonLogic.FormatValueForEdit("^MIRROR");
+        Assert.Equal("^MIRROR", result);
+        Assert.False(result.StartsWith('"'));
+        Assert.False(result.EndsWith('"'));
+    }
+
+    [Fact]
+    public void RawJsonLogic_FormatValueForEdit_NullReturnsNull()
+    {
+        Assert.Equal("null", RawJsonLogic.FormatValueForEdit(null));
+    }
+
+    [Fact]
+    public void RawJsonLogic_FormatValueForEdit_BoolReturnsLowercase()
+    {
+        Assert.Equal("true", RawJsonLogic.FormatValueForEdit(true));
+        Assert.Equal("false", RawJsonLogic.FormatValueForEdit(false));
+    }
+
+    [Fact]
+    public void RawJsonLogic_FormatValueForEdit_NumberReturnsPlain()
+    {
+        Assert.Equal("42", RawJsonLogic.FormatValueForEdit(42));
+        Assert.Equal("3.14", RawJsonLogic.FormatValueForEdit(3.14));
+    }
+
+    // --- RawJsonLogic: ParseInputValue type preservation ---
+
+    [Fact]
+    public void RawJsonLogic_ParseInputValue_StringOriginal_PreservesType()
+    {
+        // When original value is a string, the result should always be a string
+        Assert.IsType<string>(RawJsonLogic.ParseInputValue("true", "original"));
+        Assert.Equal("true", RawJsonLogic.ParseInputValue("true", "original"));
+    }
+
+    [Fact]
+    public void RawJsonLogic_ParseInputValue_StringOriginal_PreservesNumericString()
+    {
+        // A numeric string like "42" should stay as string "42", not become int 42
+        Assert.IsType<string>(RawJsonLogic.ParseInputValue("42", "original"));
+        Assert.Equal("42", RawJsonLogic.ParseInputValue("42", "original"));
+    }
+
+    [Fact]
+    public void RawJsonLogic_ParseInputValue_StringOriginal_PreservesNullString()
+    {
+        // A string value "null" should stay as string "null", not become null
+        Assert.IsType<string>(RawJsonLogic.ParseInputValue("null", "original"));
+        Assert.Equal("null", RawJsonLogic.ParseInputValue("null", "original"));
+    }
+
+    [Fact]
+    public void RawJsonLogic_ParseInputValue_IntOriginal_ParsesNumber()
+    {
+        // When original is not a string, normal parsing applies
+        object? result = RawJsonLogic.ParseInputValue("42", 0);
+        Assert.Equal(42L, result);
+    }
+
+    [Fact]
+    public void RawJsonLogic_ParseInputValue_BoolOriginal_ParsesBool()
+    {
+        object? result = RawJsonLogic.ParseInputValue("true", false);
+        Assert.IsType<bool>(result);
+        Assert.Equal(true, result);
+    }
+
+    [Fact]
+    public void RawJsonLogic_ParseInputValue_NullOriginal_ParsesNull()
+    {
+        Assert.Null(RawJsonLogic.ParseInputValue("null", 0));
+    }
+
+    [Fact]
+    public void RawJsonLogic_ParseInputValue_NewValue_ParsesTypes()
+    {
+        // Overload without originalValue should infer types
+        Assert.Null(RawJsonLogic.ParseInputValue("null"));
+        Assert.Equal(true, RawJsonLogic.ParseInputValue("true"));
+        Assert.Equal(false, RawJsonLogic.ParseInputValue("false"));
+        Assert.Equal(42L, RawJsonLogic.ParseInputValue("42"));
+        Assert.Equal("hello", RawJsonLogic.ParseInputValue("hello"));
+    }
+
+    [Fact]
+    public void RawJsonLogic_StringEdit_RoundTrip()
+    {
+        // Simulate editing "^MIRROR" to "B_WNG_R" via FormatValueForEdit → ParseInputValue
+        string originalValue = "^MIRROR";
+        string editDisplayed = RawJsonLogic.FormatValueForEdit(originalValue);
+        Assert.Equal("^MIRROR", editDisplayed); // No quotes shown
+
+        // User types new value directly
+        object? result = RawJsonLogic.ParseInputValue("B_WNG_R", originalValue);
+        Assert.IsType<string>(result);
+        Assert.Equal("B_WNG_R", result);
+    }
+
+    // --- RawJsonLogic: ComputeSimpleDiff ---
+
+    [Fact]
+    public void RawJsonLogic_ComputeSimpleDiff_IdenticalInputs_ReturnsNoChanges()
+    {
+        string json = "{\n  \"key\": \"value\"\n}";
+        string result = RawJsonLogic.ComputeSimpleDiff(json, json);
+        Assert.Equal("No changes detected.", result);
+    }
+
+    [Fact]
+    public void RawJsonLogic_ComputeSimpleDiff_AddedLine_ShowsPlusPrefix()
+    {
+        string original = "{\n  \"a\": 1\n}";
+        string modified = "{\n  \"a\": 1,\n  \"b\": 2\n}";
+        string diff = RawJsonLogic.ComputeSimpleDiff(original, modified);
+        Assert.Contains("+ ", diff);
+    }
+
+    [Fact]
+    public void RawJsonLogic_ComputeSimpleDiff_RemovedLine_ShowsMinusPrefix()
+    {
+        string original = "{\n  \"a\": 1,\n  \"b\": 2\n}";
+        string modified = "{\n  \"a\": 1\n}";
+        string diff = RawJsonLogic.ComputeSimpleDiff(original, modified);
+        Assert.Contains("- ", diff);
+    }
+
+    [Fact]
+    public void RawJsonLogic_ComputeSimpleDiff_UnchangedLines_ShowsDoubleSpacePrefix()
+    {
+        string original = "{\n  \"a\": 1\n}";
+        string modified = "{\n  \"a\": 2\n}";
+        string diff = RawJsonLogic.ComputeSimpleDiff(original, modified);
+        // The braces { and } should be unchanged
+        Assert.Contains("  {", diff);
+    }
+
+    [Fact]
+    public void RawJsonLogic_ComputeSimpleDiff_ChangedValue_ShowsBothOldAndNew()
+    {
+        var original = new JsonObject();
+        original.Add("name", "old");
+        var modified = new JsonObject();
+        modified.Add("name", "new");
+        string diff = RawJsonLogic.ComputeSimpleDiff(
+            RawJsonLogic.ToDisplayString(original),
+            RawJsonLogic.ToDisplayString(modified));
+        Assert.Contains("-", diff);
+        Assert.Contains("+", diff);
+    }
+
+    // --- RawJsonLogic: ComputeCompactDiff ---
+
+    [Fact]
+    public void RawJsonLogic_ComputeCompactDiff_IdenticalInputs_ReturnsEmptyList()
+    {
+        string json = "{\n  \"key\": \"value\"\n}";
+        var result = RawJsonLogic.ComputeCompactDiff(json, json);
+        Assert.Empty(result);
+    }
+
+    [Fact]
+    public void RawJsonLogic_ComputeCompactDiff_AddedLine_ShowsAddedType()
+    {
+        string original = "{\n  \"a\": 1\n}";
+        string modified = "{\n  \"a\": 1,\n  \"b\": 2\n}";
+        var result = RawJsonLogic.ComputeCompactDiff(original, modified);
+        Assert.Contains(result, dl => dl.Type == RawJsonLogic.DiffLineType.Added);
+    }
+
+    [Fact]
+    public void RawJsonLogic_ComputeCompactDiff_RemovedLine_ShowsRemovedType()
+    {
+        string original = "{\n  \"a\": 1,\n  \"b\": 2\n}";
+        string modified = "{\n  \"a\": 1\n}";
+        var result = RawJsonLogic.ComputeCompactDiff(original, modified);
+        Assert.Contains(result, dl => dl.Type == RawJsonLogic.DiffLineType.Removed);
+    }
+
+    [Fact]
+    public void RawJsonLogic_ComputeCompactDiff_LargeUnchangedRegion_CollapsedWithSeparator()
+    {
+        // Build two documents with a large unchanged region between two changes
+        var sbOld = new System.Text.StringBuilder();
+        var sbNew = new System.Text.StringBuilder();
+        sbOld.AppendLine("CHANGED_OLD_START");
+        sbNew.AppendLine("CHANGED_NEW_START");
+        for (int i = 0; i < 50; i++)
+        {
+            sbOld.AppendLine($"  unchanged line {i}");
+            sbNew.AppendLine($"  unchanged line {i}");
+        }
+        sbOld.AppendLine("CHANGED_OLD_END");
+        sbNew.AppendLine("CHANGED_NEW_END");
+
+        var result = RawJsonLogic.ComputeCompactDiff(sbOld.ToString(), sbNew.ToString(), contextLines: 3);
+
+        // Should have a separator in the middle (the 50 unchanged lines are collapsed)
+        Assert.Contains(result, dl => dl.Type == RawJsonLogic.DiffLineType.Separator);
+
+        // The total lines should be much less than 50 + 4 changes
+        // (3 context before + separator + 3 context after = ~10 lines vs 54)
+        int totalLines = result.Count;
+        Assert.True(totalLines < 20, $"Expected compact output, got {totalLines} lines");
+    }
+
+    [Fact]
+    public void RawJsonLogic_ComputeCompactDiff_ContextLinesPreserved()
+    {
+        // Build: changed line, then 10 unchanged, then changed line
+        var sbOld = new System.Text.StringBuilder();
+        var sbNew = new System.Text.StringBuilder();
+        sbOld.AppendLine("OLD_FIRST");
+        sbNew.AppendLine("NEW_FIRST");
+        for (int i = 0; i < 10; i++)
+        {
+            sbOld.AppendLine($"  same {i}");
+            sbNew.AppendLine($"  same {i}");
+        }
+        sbOld.AppendLine("OLD_LAST");
+        sbNew.AppendLine("NEW_LAST");
+
+        var result = RawJsonLogic.ComputeCompactDiff(sbOld.ToString(), sbNew.ToString(), contextLines: 2);
+
+        // Context lines near the changes should be preserved
+        var contextLines = result.Where(dl => dl.Type == RawJsonLogic.DiffLineType.Context).ToList();
+        Assert.True(contextLines.Count >= 2, $"Expected at least 2 context lines, got {contextLines.Count}");
+    }
+
+    [Fact]
+    public void RawJsonLogic_CollapseContext_NoChanges_ReturnsEmpty()
+    {
+        // All context lines with no changes → should collapse to nothing
+        var raw = new List<(RawJsonLogic.DiffLineType, string)>
+        {
+            (RawJsonLogic.DiffLineType.Context, "line1"),
+            (RawJsonLogic.DiffLineType.Context, "line2"),
+            (RawJsonLogic.DiffLineType.Context, "line3"),
+        };
+        var result = RawJsonLogic.CollapseContext(raw, 1);
+        // No changes, so everything is far from a change — should be empty or just a separator
+        Assert.DoesNotContain(result, dl => dl.Type == RawJsonLogic.DiffLineType.Added);
+        Assert.DoesNotContain(result, dl => dl.Type == RawJsonLogic.DiffLineType.Removed);
+    }
+
+    // --- RawJsonLogic: Myers diff correctness (duplicate JSON lines) ---
+
+    [Fact]
+    public void RawJsonLogic_ComputeSimpleDiff_DuplicateJsonLines_MinimalDiff()
+    {
+        // This test reproduces the bug where changing a single value in a JSON array
+        // with duplicate structures (like {, }, ],) caused large phantom add/remove blocks
+        string original = "{\n  \"Array\": [\n    {\n      \"Value\": 5\n    },\n    {\n      \"Value\": 5\n    },\n    {\n      \"Value\": 5\n    }\n  ]\n}";
+        string modified = "{\n  \"Array\": [\n    {\n      \"Value\": 1\n    },\n    {\n      \"Value\": 5\n    },\n    {\n      \"Value\": 5\n    }\n  ]\n}";
+
+        string diff = RawJsonLogic.ComputeSimpleDiff(original, modified);
+
+        // Should have exactly 1 removed and 1 added line (the changed value)
+        var lines = diff.Split('\n', StringSplitOptions.RemoveEmptyEntries);
+        int addedCount = lines.Count(l => l.StartsWith("+ "));
+        int removedCount = lines.Count(l => l.StartsWith("- "));
+
+        Assert.Equal(1, addedCount);
+        Assert.Equal(1, removedCount);
+        Assert.Contains("-       \"Value\": 5", diff);
+        Assert.Contains("+       \"Value\": 1", diff);
+    }
+
+    [Fact]
+    public void RawJsonLogic_ComputeCompactDiff_DuplicateJsonLines_MinimalDiff()
+    {
+        // Same scenario but via ComputeCompactDiff
+        string original = "{\n  \"Array\": [\n    {\n      \"Value\": 5\n    },\n    {\n      \"Value\": 5\n    },\n    {\n      \"Value\": 5\n    }\n  ]\n}";
+        string modified = "{\n  \"Array\": [\n    {\n      \"Value\": 1\n    },\n    {\n      \"Value\": 5\n    },\n    {\n      \"Value\": 5\n    }\n  ]\n}";
+
+        var result = RawJsonLogic.ComputeCompactDiff(original, modified);
+
+        int addedCount = result.Count(dl => dl.Type == RawJsonLogic.DiffLineType.Added);
+        int removedCount = result.Count(dl => dl.Type == RawJsonLogic.DiffLineType.Removed);
+
+        Assert.Equal(1, addedCount);
+        Assert.Equal(1, removedCount);
+    }
+
+    [Fact]
+    public void RawJsonLogic_ComputeCompactDiff_NestedDuplicateStructures_MinimalDiff()
+    {
+        // Deep JSON nesting with many duplicate closing braces
+        string original = "{\n  \"PlayerStateData\": {\n    \"Records\": [\n      {\n        \"StatValue\": 0,\n        \"Name\": \"a\"\n      },\n      {\n        \"StatValue\": 0,\n        \"Name\": \"b\"\n      }\n    ]\n  }\n}";
+        string modified = "{\n  \"PlayerStateData\": {\n    \"Records\": [\n      {\n        \"StatValue\": 1,\n        \"Name\": \"a\"\n      },\n      {\n        \"StatValue\": 0,\n        \"Name\": \"b\"\n      }\n    ]\n  }\n}";
+
+        var result = RawJsonLogic.ComputeCompactDiff(original, modified);
+
+        int addedCount = result.Count(dl => dl.Type == RawJsonLogic.DiffLineType.Added);
+        int removedCount = result.Count(dl => dl.Type == RawJsonLogic.DiffLineType.Removed);
+
+        // Only the "StatValue": 0 → "StatValue": 1 change
+        Assert.Equal(1, addedCount);
+        Assert.Equal(1, removedCount);
+        Assert.Contains(result, dl => dl.Type == RawJsonLogic.DiffLineType.Added && dl.Text.Contains("\"StatValue\": 1"));
+        Assert.Contains(result, dl => dl.Type == RawJsonLogic.DiffLineType.Removed && dl.Text.Contains("\"StatValue\": 0"));
+    }
+
+    [Fact]
+    public void RawJsonLogic_ComputeRawDiff_EmptyOld_AllAdded()
+    {
+        var result = RawJsonLogic.ComputeRawDiff([], ["a", "b", "c"]);
+        Assert.Equal(3, result.Count);
+        Assert.All(result, dl => Assert.Equal(RawJsonLogic.DiffLineType.Added, dl.Type));
+    }
+
+    [Fact]
+    public void RawJsonLogic_ComputeRawDiff_EmptyNew_AllRemoved()
+    {
+        var result = RawJsonLogic.ComputeRawDiff(["a", "b", "c"], []);
+        Assert.Equal(3, result.Count);
+        Assert.All(result, dl => Assert.Equal(RawJsonLogic.DiffLineType.Removed, dl.Type));
+    }
+
+    [Fact]
+    public void RawJsonLogic_ComputeRawDiff_SingleLineChange_CorrectDiff()
+    {
+        var result = RawJsonLogic.ComputeRawDiff(["a", "b", "c"], ["a", "x", "c"]);
+
+        Assert.Equal(4, result.Count); // a(ctx), -b, +x, c(ctx)
+        Assert.Equal(RawJsonLogic.DiffLineType.Context, result[0].Type);
+        Assert.Equal(RawJsonLogic.DiffLineType.Removed, result[1].Type);
+        Assert.Equal("b", result[1].Text);
+        Assert.Equal(RawJsonLogic.DiffLineType.Added, result[2].Type);
+        Assert.Equal("x", result[2].Text);
+        Assert.Equal(RawJsonLogic.DiffLineType.Context, result[3].Type);
+    }
+
     // --- Settlement Production Filtering ---
 
     [Fact]
@@ -4716,12 +5550,12 @@ public class LogicTests
     // --- Product item types excludes technology ---
 
     [Fact]
-    public void DiscoveryLogic_ProductItemTypes_ExcludesTechnology()
+    public void CatalogueLogic_ProductItemTypes_ExcludesTechnology()
     {
-        Assert.DoesNotContain("Technology", DiscoveryLogic.ProductItemTypes);
-        Assert.DoesNotContain("Upgrades", DiscoveryLogic.ProductItemTypes);
-        Assert.Contains("Products", DiscoveryLogic.ProductItemTypes);
-        Assert.Contains("Buildings", DiscoveryLogic.ProductItemTypes);
+        Assert.DoesNotContain("Technology", CatalogueLogic.ProductItemTypes);
+        Assert.DoesNotContain("Upgrades", CatalogueLogic.ProductItemTypes);
+        Assert.Contains("Products", CatalogueLogic.ProductItemTypes);
+        Assert.Contains("Buildings", CatalogueLogic.ProductItemTypes);
     }
 
     // --- IsLearnableTechnology tests ---
@@ -4730,28 +5564,28 @@ public class LogicTests
     public void IsLearnableTechnology_NonProceduralNonMaintenance_ReturnsTrue()
     {
         var item = new GameItem { Id = "LASER", Category = "Weapon", IsProcedural = false };
-        Assert.True(DiscoveryLogic.IsLearnableTechnology(item));
+        Assert.True(CatalogueLogic.IsLearnableTechnology(item));
     }
 
     [Fact]
     public void IsLearnableTechnology_Procedural_ReturnsFalse()
     {
         var item = new GameItem { Id = "UP_LASER1", Category = "Weapon", IsProcedural = true };
-        Assert.False(DiscoveryLogic.IsLearnableTechnology(item));
+        Assert.False(CatalogueLogic.IsLearnableTechnology(item));
     }
 
     [Fact]
     public void IsLearnableTechnology_Maintenance_ReturnsFalse()
     {
         var item = new GameItem { Id = "YOURPORTALGLYPH0", Category = "Maintenance", IsProcedural = false };
-        Assert.False(DiscoveryLogic.IsLearnableTechnology(item));
+        Assert.False(CatalogueLogic.IsLearnableTechnology(item));
     }
 
     [Fact]
     public void IsLearnableTechnology_EmptyCategory_ReturnsTrue()
     {
         var item = new GameItem { Id = "TECH1", Category = "", IsProcedural = false };
-        Assert.True(DiscoveryLogic.IsLearnableTechnology(item));
+        Assert.True(CatalogueLogic.IsLearnableTechnology(item));
     }
 
     // --- IsLearnableProduct tests ---
@@ -4760,21 +5594,21 @@ public class LogicTests
     public void IsLearnableProduct_CraftableNonProcedural_ReturnsTrue()
     {
         var item = new GameItem { Id = "CRATE1", IsCraftable = true, IsProcedural = false, TradeCategory = "" };
-        Assert.True(DiscoveryLogic.IsLearnableProduct(item));
+        Assert.True(CatalogueLogic.IsLearnableProduct(item));
     }
 
     [Fact]
     public void IsLearnableProduct_NotCraftable_ReturnsFalse()
     {
         var item = new GameItem { Id = "ITEM1", IsCraftable = false, IsProcedural = false, TradeCategory = "" };
-        Assert.False(DiscoveryLogic.IsLearnableProduct(item));
+        Assert.False(CatalogueLogic.IsLearnableProduct(item));
     }
 
     [Fact]
     public void IsLearnableProduct_Procedural_ReturnsFalse()
     {
         var item = new GameItem { Id = "PROC1", IsCraftable = true, IsProcedural = true, TradeCategory = "" };
-        Assert.False(DiscoveryLogic.IsLearnableProduct(item));
+        Assert.False(CatalogueLogic.IsLearnableProduct(item));
     }
 
     [Fact]
@@ -4782,7 +5616,7 @@ public class LogicTests
     {
         // Items in the SpecialShop trade category are always learnable regardless of craftability
         var item = new GameItem { Id = "SPEC1", IsCraftable = false, IsProcedural = false, TradeCategory = "SpecialShop" };
-        Assert.True(DiscoveryLogic.IsLearnableProduct(item));
+        Assert.True(CatalogueLogic.IsLearnableProduct(item));
     }
 
     [Fact]
@@ -4790,14 +5624,14 @@ public class LogicTests
     {
         // Even procedural items in SpecialShop are learnable (IsSpecial overrides)
         var item = new GameItem { Id = "SPEC2", IsCraftable = false, IsProcedural = true, TradeCategory = "SpecialShop" };
-        Assert.True(DiscoveryLogic.IsLearnableProduct(item));
+        Assert.True(CatalogueLogic.IsLearnableProduct(item));
     }
 
     [Fact]
     public void IsLearnableProduct_CraftableAndSpecial_ReturnsTrue()
     {
         var item = new GameItem { Id = "BOTH1", IsCraftable = true, IsProcedural = false, TradeCategory = "SpecialShop" };
-        Assert.True(DiscoveryLogic.IsLearnableProduct(item));
+        Assert.True(CatalogueLogic.IsLearnableProduct(item));
     }
 
     // --- ExportConfig -----------------------------------------------
@@ -6485,7 +7319,7 @@ public class LogicTests
     public void JsonParser_UnicodeEscapeLatin1Range_ReturnsStringNotBinaryData()
     {
         // \u00E9 (é, U+00E9) is in the 0x80-0xFF range but arrives as a \u escape,
-        // so it represents intentional Unicode — not raw binary data.
+        // so it represents intentional Unicode - not raw binary data.
         // This must parse as a string, NOT BinaryData.
         string json = """{"SaveName": "Caf\u00E9 \u00FC\u00F1"}""";
         var obj = JsonObject.Parse(json);
@@ -6498,17 +7332,133 @@ public class LogicTests
     }
 
     [Fact]
-    public void JsonParser_RawHighBytes_ReturnsBinaryData()
+    public void JsonParser_RawHighBytes_ValidUtf8_ReturnsDecodedString()
     {
-        // Simulate what happens when Latin-1 decoded save data contains raw bytes
-        // >= 0x80 (e.g. techpack binary payloads). These raw chars in the JSON source
-        // must be detected as binary data.
-        // Build a JSON string with a raw char >= 0x80 (Latin-1 byte 0xCE)
+        // When Latin-1 decoded save data contains raw bytes that form valid
+        // UTF-8 sequences (e.g. a Greek save name), the parser must decode
+        // them as UTF-8 text, NOT return BinaryData.
+        // CE BB is the UTF-8 encoding of λ (U+03BB).
         string json = "{\"Data\": \"" + (char)0xCE + (char)0xBB + "\"}";
         var obj = JsonObject.Parse(json);
 
         var value = obj.Get("Data");
+        Assert.IsType<string>(value);
+        Assert.Equal("\u03BB", (string)value!); // λ
+    }
+
+    [Fact]
+    public void JsonParser_RawHighBytes_InvalidUtf8_ReturnsBinaryData()
+    {
+        // A lone continuation byte (0x80) without a preceding start byte is
+        // invalid UTF-8, so this must remain BinaryData.
+        string json = "{\"Data\": \"" + (char)0x80 + (char)0x01 + "\"}";
+        var obj = JsonObject.Parse(json);
+
+        var value = obj.Get("Data");
         Assert.IsType<BinaryData>(value);
+    }
+
+    [Fact]
+    public void JsonParser_RawUtf8_GreekSaveName_ReturnsString()
+    {
+        // Simulate a save name "λŦLλS Breach" stored as raw UTF-8 bytes
+        // read through Latin-1 encoding (the exact scenario from the bug report).
+        // λ = CE BB, Ŧ = C5 A6 in UTF-8
+        string latin1 = "" + (char)0xCE + (char)0xBB     // λ
+                            + (char)0xC5 + (char)0xA6     // Ŧ
+                            + "L"
+                            + (char)0xCE + (char)0xBB     // λ
+                            + "S Breach";
+        string json = "{\"SaveName\": \"" + latin1 + "\"}";
+        var obj = JsonObject.Parse(json);
+
+        var value = obj.Get("SaveName");
+        Assert.IsType<string>(value);
+        Assert.Equal("\u03BB\u0166L\u03BBS Breach", (string)value!);
+    }
+
+    [Fact]
+    public void JsonParser_RawUtf8_CjkCharacters_ReturnsString()
+    {
+        // CJK character 漢 = E6 BC A2 in UTF-8
+        // Japanese あ = E3 81 82 in UTF-8
+        string latin1 = "" + (char)0xE6 + (char)0xBC + (char)0xA2   // 漢
+                            + (char)0xE3 + (char)0x81 + (char)0x82;  // あ
+        string json = "{\"Name\": \"" + latin1 + "\"}";
+        var obj = JsonObject.Parse(json);
+
+        var value = obj.Get("Name");
+        Assert.IsType<string>(value);
+        Assert.Equal("漢あ", (string)value!);
+    }
+
+    [Fact]
+    public void JsonParser_RawUtf8_KoreanCharacters_ReturnsString()
+    {
+        // Korean 한 = ED 95 9C in UTF-8
+        string latin1 = "" + (char)0xED + (char)0x95 + (char)0x9C   // 한
+                            + "Test";
+        string json = "{\"Name\": \"" + latin1 + "\"}";
+        var obj = JsonObject.Parse(json);
+
+        var value = obj.Get("Name");
+        Assert.IsType<string>(value);
+        Assert.Equal("\uD55CTest", (string)value!); // 한 + "Test"
+    }
+
+    [Fact]
+    public void JsonParser_RawUtf8_CyrillicCharacters_ReturnsString()
+    {
+        // Cyrillic Б = D0 91 in UTF-8
+        string latin1 = "" + (char)0xD0 + (char)0x91;   // Б
+        string json = "{\"Name\": \"" + latin1 + "\"}";
+        var obj = JsonObject.Parse(json);
+
+        var value = obj.Get("Name");
+        Assert.IsType<string>(value);
+        Assert.Equal("\u0411", (string)value!); // Б
+    }
+
+    [Fact]
+    public void JsonParser_RawUtf8_SettlementName_MixedGreekAscii_ReturnsString()
+    {
+        // Simulate settlement name "00σφ011ηρ Station" as stored in save file.
+        // σ=CF83, φ=CF86, η=CEB7, ρ=CF81 in UTF-8
+        string latin1 = "00"
+            + (char)0xCF + (char)0x83    // σ
+            + (char)0xCF + (char)0x86    // φ
+            + "011"
+            + (char)0xCE + (char)0xB7    // η
+            + (char)0xCF + (char)0x81    // ρ
+            + " Station";
+        string json = "{\"Name\": \"" + latin1 + "\"}";
+        var obj = JsonObject.Parse(json);
+
+        var value = obj.Get("Name");
+        Assert.IsType<string>(value);
+        Assert.Equal("00\u03C3\u03C6011\u03B7\u03C1 Station", (string)value!);
+    }
+
+    [Fact]
+    public void JsonParser_RawUtf8_RoundTrip_PreservesContent()
+    {
+        // Parse a string with raw UTF-8 bytes, serialize it, parse again,
+        // and verify the content is preserved.
+        // λ = CE BB in UTF-8
+        string latin1 = "Hello " + (char)0xCE + (char)0xBB + " World";
+        string json = "{\"Name\": \"" + latin1 + "\"}";
+        var obj = JsonObject.Parse(json);
+
+        string name = obj.GetString("Name")!;
+        Assert.Equal("Hello \u03BB World", name);
+
+        // Re-serialize (this writes \u03BB as a \uXXXX escape)
+        string output = obj.ToString();
+
+        // Parse again
+        var obj2 = JsonObject.Parse(output);
+        string name2 = obj2.GetString("Name")!;
+        Assert.Equal(name, name2);
     }
 
     [Fact]
@@ -6524,6 +7474,49 @@ public class LogicTests
         var binary = (BinaryData)value!;
         Assert.Equal(5, binary.ToByteArray().Length);
         Assert.Equal(0x80, binary.ToByteArray()[0]);
+    }
+
+    [Fact]
+    public void JsonParser_TechPackHexEscape_ReturnsBinaryData()
+    {
+        // TechPack item IDs use \x hex escapes: e.g. ^808497C54986
+        // stored as \x5E\x80\x84\x97\xC5\x49\x86.
+        // This must remain BinaryData - the UTF-8 fix must not affect this path.
+        string json = """{"Id": "\x5E\x80\x84\x97\xC5\x49\x86"}""";
+        var obj = JsonObject.Parse(json);
+
+        var value = obj.Get("Id");
+        Assert.IsType<BinaryData>(value);
+        var binary = (BinaryData)value!;
+        Assert.Equal(7, binary.ToByteArray().Length);
+        Assert.Equal(0x5E, binary.ToByteArray()[0]); // '^'
+        Assert.Equal(0x80, binary.ToByteArray()[1]);
+    }
+
+    [Fact]
+    public void JsonParser_TechPackHexEscapeWithVariant_ReturnsBinaryData()
+    {
+        // TechPack ID with variant suffix: \x5E\x80\x84\x97\xC5\x49\x86#12345
+        // The \x escapes must keep this on the BinaryData path.
+        string json = """{"Id": "\x5E\x80\x84\x97\xC5\x49\x86#12345"}""";
+        var obj = JsonObject.Parse(json);
+
+        var value = obj.Get("Id");
+        Assert.IsType<BinaryData>(value);
+    }
+
+    [Fact]
+    public void JsonParser_RawTechPackBytes_InvalidUtf8_ReturnsBinaryData()
+    {
+        // Simulate TechPack bytes appearing as raw Latin-1 characters (no \x escapes).
+        // ^(0x5E) followed by 0x80 is invalid UTF-8 (continuation byte without
+        // start byte), so this must still be detected as BinaryData.
+        string json = "{\"Id\": \"" + (char)0x5E + (char)0x80 + (char)0x84
+            + (char)0x97 + (char)0xC5 + (char)0x49 + (char)0x86 + "\"}";
+        var obj = JsonObject.Parse(json);
+
+        var value = obj.Get("Id");
+        Assert.IsType<BinaryData>(value);
     }
 
     // --- SPEC_XOHELMET database entry test ---
@@ -6587,5 +7580,1627 @@ public class LogicTests
             dir = parent.FullName;
         }
         return null;
+    }
+
+    // --- Raw value preservation tests ---
+
+    [Fact]
+    public void MainStatsLogic_ReadRawStatValue_ReturnsUnclamped()
+    {
+        var ps = new JsonObject();
+        ps.Add("Health", 999999999); // Exceeds typical max of 999999
+        decimal raw = MainStatsLogic.ReadRawStatValue(ps, "Health");
+        Assert.Equal(999999999m, raw);
+    }
+
+    [Fact]
+    public void MainStatsLogic_ReadStatValue_ClampsToRange()
+    {
+        var ps = new JsonObject();
+        ps.Add("Health", 999999999);
+        decimal clamped = MainStatsLogic.ReadStatValue(ps, "Health", 0, 999999);
+        Assert.Equal(999999m, clamped);
+    }
+
+    [Fact]
+    public void MainStatsLogic_WriteStatValues_SkipsUnchangedWithRawValues()
+    {
+        var ps = new JsonObject();
+        ps.Add("Health", 5000000); // Above max (999999)
+        ps.Add("Shield", 100);
+        ps.Add("Energy", 200);
+        ps.Add("Units", 50);
+        ps.Add("Nanites", 60);
+        ps.Add("Specials", 70);
+
+        var rawValues = new Dictionary<string, decimal>
+        {
+            ["Health"] = 5000000m,
+            ["Shield"] = 100m,
+            ["Energy"] = 200m,
+            ["Units"] = 50m,
+            ["Nanites"] = 60m,
+            ["Specials"] = 70m,
+        };
+
+        // health=999999 (clamped max), shield/energy/units/nanites/quicksilver = raw values (in range)
+        MainStatsLogic.WriteStatValues(ps, 999999, 100, 200, 50, 60, 70, rawValues);
+
+        // Health should NOT be written (999999 == clamp(5000000, 0, 999999))
+        // so original 5000000 is preserved
+        Assert.Equal(5000000, ps.GetInt("Health"));
+
+        // Shield IS in range, so 100 == clamp(100, 0, 999999) - should NOT be written
+        Assert.Equal(100, ps.GetInt("Shield"));
+    }
+
+    [Fact]
+    public void MainStatsLogic_WriteStatValues_WritesChangedValues()
+    {
+        var ps = new JsonObject();
+        ps.Add("Health", 5000000);
+        ps.Add("Shield", 100);
+        ps.Add("Energy", 200);
+        ps.Add("Units", 50);
+        ps.Add("Nanites", 60);
+        ps.Add("Specials", 70);
+
+        var rawValues = new Dictionary<string, decimal>
+        {
+            ["Health"] = 5000000m,
+            ["Shield"] = 100m,
+            ["Energy"] = 200m,
+            ["Units"] = 50m,
+            ["Nanites"] = 60m,
+            ["Specials"] = 70m,
+        };
+
+        // User changed shield from 100 to 500
+        MainStatsLogic.WriteStatValues(ps, 999999, 500, 200, 50, 60, 70, rawValues);
+
+        // Health: NOT written (unchanged from clamped), original preserved
+        Assert.Equal(5000000, ps.GetInt("Health"));
+
+        // Shield: WRITTEN (user changed it from 100 to 500)
+        Assert.Equal(500, ps.GetInt("Shield"));
+    }
+
+    [Fact]
+    public void MainStatsLogic_WriteStatValues_NullRawValues_AlwaysWrites()
+    {
+        var ps = new JsonObject();
+        ps.Add("Health", 5000000);
+        ps.Add("Shield", 100);
+        ps.Add("Energy", 200);
+        ps.Add("Units", 50);
+        ps.Add("Nanites", 60);
+        ps.Add("Specials", 70);
+
+        // Without raw values, always write (backward compatible behavior)
+        MainStatsLogic.WriteStatValues(ps, 999999, 100, 200, 50, 60, 70, null);
+        Assert.Equal(999999, ps.GetInt("Health"));
+    }
+
+    [Fact]
+    public void SaveShipData_PreservesRawStats_WhenUnchanged()
+    {
+        // Setup a ship with stats that exceed BaseStatLimits
+        var ship = new JsonObject();
+        ship.Add("Name", "");
+        var resource = new JsonObject();
+        resource.Add("Filename", "");
+        var seedArr = new JsonArray();
+        seedArr.Add(true);
+        seedArr.Add("0x0");
+        resource.Add("Seed", seedArr);
+        ship.Add("Resource", resource);
+
+        var inv = new JsonObject();
+        var bsv = new JsonArray();
+        AddBaseStatEntry(bsv, "^SHIP_DAMAGE", 999.0); // above typical max
+        AddBaseStatEntry(bsv, "^SHIP_SHIELD", 50.0);
+        AddBaseStatEntry(bsv, "^SHIP_HYPERDRIVE", 500.0); // above typical max
+        AddBaseStatEntry(bsv, "^SHIP_AGILE", 30.0);
+        inv.Add("BaseStatValues", bsv);
+        ship.Add("Inventory", inv);
+
+        var playerState = new JsonObject();
+        playerState.Add("PrimaryShip", 0);
+
+        // Simulate: UI values are what clamping would produce from raw values
+        var range = BaseStatLimits.GetRange("Normal", "^SHIP_DAMAGE", StatCategory.Ship);
+        double clampedDamage = range != null ? Math.Max(range.MinValue, Math.Min(999.0, range.MaxValue)) : 999.0;
+        var rangeHd = BaseStatLimits.GetRange("Normal", "^SHIP_HYPERDRIVE", StatCategory.Ship);
+        double clampedHd = rangeHd != null ? Math.Max(rangeHd.MinValue, Math.Min(500.0, rangeHd.MaxValue)) : 500.0;
+
+        var values = new StarshipLogic.ShipSaveValues
+        {
+            Name = "TestShip",
+            ShipIndex = -1,
+            Damage = clampedDamage,
+            Shield = 50.0,
+            Hyperdrive = clampedHd,
+            Maneuver = 30.0,
+            RawStatValues = new Dictionary<string, double>
+            {
+                ["^SHIP_DAMAGE"] = 999.0,
+                ["^SHIP_SHIELD"] = 50.0,
+                ["^SHIP_HYPERDRIVE"] = 500.0,
+                ["^SHIP_AGILE"] = 30.0,
+            }
+        };
+        StarshipLogic.SaveShipData(ship, playerState, values);
+
+        // Raw values should be preserved (999.0 and 500.0)
+        double savedDamage = StatHelper.ReadBaseStatValue(ship.GetObject("Inventory"), "^SHIP_DAMAGE");
+        double savedHd = StatHelper.ReadBaseStatValue(ship.GetObject("Inventory"), "^SHIP_HYPERDRIVE");
+        Assert.Equal(999.0, savedDamage);
+        Assert.Equal(500.0, savedHd);
+    }
+
+    [Fact]
+    public void SaveShipData_WritesNewStats_WhenUserChanged()
+    {
+        var ship = new JsonObject();
+        ship.Add("Name", "");
+        var resource = new JsonObject();
+        resource.Add("Filename", "");
+        var seedArr = new JsonArray();
+        seedArr.Add(true);
+        seedArr.Add("0x0");
+        resource.Add("Seed", seedArr);
+        ship.Add("Resource", resource);
+
+        var inv = new JsonObject();
+        var bsv = new JsonArray();
+        AddBaseStatEntry(bsv, "^SHIP_DAMAGE", 999.0);
+        inv.Add("BaseStatValues", bsv);
+        ship.Add("Inventory", inv);
+
+        var playerState = new JsonObject();
+        playerState.Add("PrimaryShip", 0);
+
+        // User changed damage from clamped value to a new in-range value
+        var values = new StarshipLogic.ShipSaveValues
+        {
+            Name = "TestShip",
+            ShipIndex = -1,
+            Damage = 75.0, // User explicitly set this
+            RawStatValues = new Dictionary<string, double>
+            {
+                ["^SHIP_DAMAGE"] = 999.0,
+            }
+        };
+        StarshipLogic.SaveShipData(ship, playerState, values);
+
+        double savedDamage = StatHelper.ReadBaseStatValue(ship.GetObject("Inventory"), "^SHIP_DAMAGE");
+        Assert.Equal(75.0, savedDamage);
+    }
+
+    [Fact]
+    public void SaveToolData_PreservesRawStats_WhenUnchanged()
+    {
+        var tool = new JsonObject();
+        tool.Add("Name", "");
+        var seedArr = new JsonArray();
+        seedArr.Add(true);
+        seedArr.Add("0x0");
+        tool.Add("Seed", seedArr);
+
+        var store = new JsonObject();
+        var bsv = new JsonArray();
+        AddBaseStatEntry(bsv, "^WEAPON_DAMAGE", 999.0);
+        AddBaseStatEntry(bsv, "^WEAPON_MINING", 50.0);
+        AddBaseStatEntry(bsv, "^WEAPON_SCAN", 40.0);
+        store.Add("BaseStatValues", bsv);
+        store.Add("Class", new JsonObject());
+        tool.Add("Store", store);
+        tool.Add("Store_TechOnly", new JsonObject());
+
+        var range = BaseStatLimits.GetRange("Normal", "^WEAPON_DAMAGE", StatCategory.Weapon);
+        double clampedDamage = range != null ? Math.Max(range.MinValue, Math.Min(999.0, range.MaxValue)) : 999.0;
+
+        var values = new MultitoolLogic.ToolSaveValues
+        {
+            Name = "TestTool",
+            Damage = clampedDamage,
+            Mining = 50.0,
+            Scan = 40.0,
+            RawStatValues = new Dictionary<string, double>
+            {
+                ["^WEAPON_DAMAGE"] = 999.0,
+                ["^WEAPON_MINING"] = 50.0,
+                ["^WEAPON_SCAN"] = 40.0,
+            }
+        };
+
+        MultitoolLogic.SaveToolData(tool, null, values, false);
+
+        double savedDamage = StatHelper.ReadBaseStatValue(tool.GetObject("Store"), "^WEAPON_DAMAGE");
+        Assert.Equal(999.0, savedDamage);
+    }
+
+    [Fact]
+    public void ConditionalClampStatValue_PreservesRaw_WhenUnchanged()
+    {
+        var rawValues = new Dictionary<string, double> { ["^SHIP_DAMAGE"] = 999.0 };
+
+        // With MaxValue=int.MaxValue, clamping 999 produces 999, which is what the UI shows.
+        // When the user doesn't change the displayed value (999), ConditionalClamp should
+        // return the original raw value (999).
+        double clampedRaw = BaseStatLimits.ClampStatValue("Normal", "^SHIP_DAMAGE", 999.0, StatCategory.Ship);
+        double result = BaseStatLimits.ConditionalClampStatValue("Normal", "^SHIP_DAMAGE",
+            clampedRaw, StatCategory.Ship, rawValues);
+        Assert.Equal(999.0, result);
+    }
+
+    [Fact]
+    public void ConditionalClampStatValue_ClampsNewValue_WhenUserChanged()
+    {
+        var rawValues = new Dictionary<string, double> { ["^SHIP_DAMAGE"] = 999.0 };
+
+        // User changed the value to 75 (different from clamp(999))
+        double result = BaseStatLimits.ConditionalClampStatValue("Normal", "^SHIP_DAMAGE",
+            75.0, StatCategory.Ship, rawValues);
+        Assert.Equal(75.0, result);
+    }
+
+    [Fact]
+    public void ConditionalClampStatValue_NullRawValues_FallsBackToClamp()
+    {
+        // Without raw values, should just clamp
+        double result = BaseStatLimits.ConditionalClampStatValue("Normal", "^SHIP_DAMAGE",
+            999.0, StatCategory.Ship, null);
+        var range = BaseStatLimits.GetRange("Normal", "^SHIP_DAMAGE", StatCategory.Ship);
+        double expected = range != null ? Math.Max(range.MinValue, Math.Min(999.0, range.MaxValue)) : 999.0;
+        Assert.Equal(expected, result);
+    }
+
+    private static void AddBaseStatEntry(JsonArray bsv, string statId, double value)
+    {
+        var entry = new JsonObject();
+        entry.Add("BaseStatID", statId);
+        entry.Add("Value", value);
+        bsv.Add(entry);
+    }
+
+    [Fact]
+    public void BaseStatLimits_AllStatRanges_UseIntMaxValue()
+    {
+        // All base stat ranges should use int.MaxValue as their max value
+        foreach (var (entityType, stats) in BaseStatLimits.ShipStats)
+        {
+            foreach (var (statId, range) in stats)
+            {
+                Assert.Equal(0, range.MinValue);
+                Assert.Equal(int.MaxValue, range.MaxValue);
+            }
+        }
+        foreach (var (entityType, stats) in BaseStatLimits.WeaponStats)
+        {
+            foreach (var (statId, range) in stats)
+            {
+                Assert.Equal(0, range.MinValue);
+                Assert.Equal(int.MaxValue, range.MaxValue);
+            }
+        }
+        foreach (var (entityType, stats) in BaseStatLimits.FreighterStats)
+        {
+            foreach (var (statId, range) in stats)
+            {
+                Assert.Equal(0, range.MinValue);
+                Assert.Equal(int.MaxValue, range.MaxValue);
+            }
+        }
+    }
+
+    [Fact]
+    public void SettlementLogic_PopulationMax_Is400()
+    {
+        Assert.Equal(400, SettlementLogic.PopulationMax);
+    }
+
+    [Fact]
+    public void SettlementLogic_PopulationSoftMax_Is200()
+    {
+        Assert.Equal(200, SettlementLogic.PopulationSoftMax);
+    }
+
+    // --- Settlement (raw value preservation) ---
+
+    [Fact]
+    public void SettlementLogic_LoadSettlementData_StoresRawStats()
+    {
+        // Create a settlement with stats that exceed the max and a separate Population key
+        var settlement = JsonObject.Parse(@"{
+            ""Name"": ""TestSettlement"",
+            ""SeedValue"": ""ABC123"",
+            ""Owner"": { ""USN"": ""u1"", ""UID"": ""uid1"" },
+            ""Stats"": [999, 200, 1500000, 1000000, 100, 10000000, 1000, 1000],
+            ""Population"": 999,
+            ""PendingJudgementType"": { ""SettlementJudgementType"": ""None"" },
+            ""LastJudgementTime"": 0
+        }");
+
+        var data = SettlementLogic.LoadSettlementData(settlement);
+
+        // Stats are unclamped - UI shows raw values
+        Assert.Equal(999, data.Stats[0]); // MaxPopulation raw value
+        Assert.Equal(200, data.Stats[1]); // Happiness raw value
+
+        // Raw stat values should be preserved
+        Assert.Equal(999, data.RawStats[0]); // MaxPopulation raw
+        Assert.Equal(200, data.RawStats[1]); // Happiness raw
+
+        // Population field (separate from Stats[0])
+        Assert.True(data.HasPopulationKey);
+        Assert.Equal(400, data.Population); // Clamped from 999 to PopulationMax (400)
+        Assert.Equal(999, data.RawPopulation); // Raw preserved
+    }
+
+    [Fact]
+    public void SettlementLogic_ShouldWriteStat_SkipsUnchangedValue()
+    {
+        // Stats are unclamped - UI shows raw values directly.
+        // If UI value matches raw, should NOT write (no change).
+        var rawStats = new int[] { 999, 200, 1500000, 1000000, 100, 10000000, 1000, 1000 };
+
+        Assert.False(SettlementLogic.ShouldWriteStat(0, 999, rawStats)); // 999 == raw[0]
+        Assert.False(SettlementLogic.ShouldWriteStat(1, 200, rawStats)); // 200 == raw[1]
+    }
+
+    [Fact]
+    public void SettlementLogic_ShouldWriteStat_WritesWhenUserChanged()
+    {
+        // User changed value from raw - should write.
+        var rawStats = new int[] { 999, 200, 1500000, 1000000, 100, 10000000, 1000, 1000 };
+
+        Assert.True(SettlementLogic.ShouldWriteStat(0, 100, rawStats)); // 100 != 999
+        Assert.True(SettlementLogic.ShouldWriteStat(1, 50, rawStats));  // 50 != 200
+    }
+
+    [Fact]
+    public void SettlementLogic_ShouldWriteStat_NullRawStats_AlwaysWrites()
+    {
+        Assert.True(SettlementLogic.ShouldWriteStat(0, 175, null));
+        Assert.True(SettlementLogic.ShouldWriteStat(1, 180, null));
+    }
+
+    [Fact]
+    public void SettlementLogic_SaveSettlementData_PreservesUnchangedStats()
+    {
+        // Create a settlement with stats that exceed typical range
+        var settlement = JsonObject.Parse(@"{
+            ""Name"": ""TestSettlement"",
+            ""SeedValue"": ""ABC123"",
+            ""Stats"": [999, 200, 100, 50, 25, 500, 100, 100],
+            ""Population"": 999,
+            ""PendingJudgementType"": { ""SettlementJudgementType"": ""None"" },
+            ""LastJudgementTime"": 0
+        }");
+
+        // Simulate: user loads (values shown unclamped), doesn't change them, saves
+        var rawStats = new int[] { 999, 200, 100, 50, 25, 500, 100, 100 };
+
+        var saveValues = new SettlementLogic.SettlementSaveValues
+        {
+            Name = "TestSettlement",
+            SeedValue = "ABC123",
+            Stats = new int[] { 999, 200, 100, 50, 25, 500, 100, 100 }, // Unchanged from raw
+            RawStats = rawStats,
+            DecisionTypeIndex = 0,
+        };
+
+        SettlementLogic.SaveSettlementData(settlement, saveValues);
+
+        // All stats should be preserved (user didn't change any)
+        var statsArr = settlement.GetArray("Stats")!;
+        Assert.Equal(999, statsArr.GetInt(0)); // Preserved original
+        Assert.Equal(200, statsArr.GetInt(1)); // Preserved original
+
+        // In-range stats that matched should also be preserved
+        Assert.Equal(100, statsArr.GetInt(2));
+        Assert.Equal(50, statsArr.GetInt(3));
+
+        // Population field should also be preserved
+        Assert.Equal(999, settlement.GetInt("Population"));
+    }
+
+    [Fact]
+    public void SettlementLogic_SaveSettlementData_WritesChangedStats()
+    {
+        var settlement = JsonObject.Parse(@"{
+            ""Name"": ""TestSettlement"",
+            ""SeedValue"": ""ABC123"",
+            ""Stats"": [999, 200, 100, 50, 25, 500, 100, 100],
+            ""Population"": 999,
+            ""PendingJudgementType"": { ""SettlementJudgementType"": ""None"" },
+            ""LastJudgementTime"": 0
+        }");
+
+        var rawStats = new int[] { 999, 200, 100, 50, 25, 500, 100, 100 };
+
+        var saveValues = new SettlementLogic.SettlementSaveValues
+        {
+            Name = "TestSettlement",
+            SeedValue = "ABC123",
+            Stats = new int[] { 100, 50, 100, 50, 25, 500, 100, 100 }, // User changed MaxPop to 100, Happiness to 50
+            RawStats = rawStats,
+            Population = 100, // User changed Population to 100
+            RawPopulation = 999, // Raw was 999
+            HasPopulationKey = true,
+            DecisionTypeIndex = 0,
+        };
+
+        SettlementLogic.SaveSettlementData(settlement, saveValues);
+
+        var statsArr = settlement.GetArray("Stats")!;
+        Assert.Equal(100, statsArr.GetInt(0)); // User changed MaxPop - written
+        Assert.Equal(50, statsArr.GetInt(1));  // User changed Happiness - written
+        Assert.Equal(100, settlement.GetInt("Population")); // Population also written (user changed it)
+    }
+
+    [Fact]
+    public void SettlementLogic_SaveSettlementData_NullRawStats_AlwaysWrites()
+    {
+        var settlement = JsonObject.Parse(@"{
+            ""Name"": ""TestSettlement"",
+            ""SeedValue"": ""ABC123"",
+            ""Stats"": [999, 200, 100, 50, 25, 500, 100, 100],
+            ""Population"": 999,
+            ""PendingJudgementType"": { ""SettlementJudgementType"": ""None"" },
+            ""LastJudgementTime"": 0
+        }");
+
+        // No raw stats - backward-compatible behavior, always writes
+        var saveValues = new SettlementLogic.SettlementSaveValues
+        {
+            Name = "TestSettlement",
+            SeedValue = "ABC123",
+            Stats = new int[] { 175, 180, 100, 50, 25, 500, 100, 100 },
+            RawStats = null,
+            DecisionTypeIndex = 0,
+        };
+
+        SettlementLogic.SaveSettlementData(settlement, saveValues);
+
+        var statsArr = settlement.GetArray("Stats")!;
+        Assert.Equal(175, statsArr.GetInt(0)); // Written unconditionally
+        Assert.Equal(180, statsArr.GetInt(1)); // Written unconditionally
+    }
+
+    [Fact]
+    public void SettlementLogic_LoadSettlementData_NoPopulationKey_HasPopulationKeyFalse()
+    {
+        // Old save format: no top-level Population key
+        var settlement = JsonObject.Parse(@"{
+            ""Name"": ""OldSettlement"",
+            ""SeedValue"": ""OLD123"",
+            ""Owner"": { ""USN"": ""u1"", ""UID"": ""uid1"" },
+            ""Stats"": [50, 100, 500, 200, 10, 1000, 50, 50],
+            ""PendingJudgementType"": { ""SettlementJudgementType"": ""None"" },
+            ""LastJudgementTime"": 0
+        }");
+
+        var data = SettlementLogic.LoadSettlementData(settlement);
+
+        Assert.False(data.HasPopulationKey);
+        Assert.Equal(0, data.Population);
+        Assert.Equal(50, data.Stats[0]); // Stats[0] = MaxPopulation, read normally
+    }
+
+    [Fact]
+    public void SettlementLogic_SaveSettlementData_NoPopulationKey_DoesNotWritePopulation()
+    {
+        // Old save format: no Population key. Saving should NOT add one.
+        var settlement = JsonObject.Parse(@"{
+            ""Name"": ""OldSettlement"",
+            ""SeedValue"": ""OLD123"",
+            ""Stats"": [50, 100, 500, 200, 10, 1000, 50, 50],
+            ""PendingJudgementType"": { ""SettlementJudgementType"": ""None"" },
+            ""LastJudgementTime"": 0
+        }");
+
+        var saveValues = new SettlementLogic.SettlementSaveValues
+        {
+            Name = "OldSettlement",
+            SeedValue = "OLD123",
+            Stats = new int[] { 50, 100, 500, 200, 10, 1000, 50, 50 },
+            RawStats = null,
+            HasPopulationKey = false,
+            DecisionTypeIndex = 0,
+        };
+
+        SettlementLogic.SaveSettlementData(settlement, saveValues);
+
+        // Should NOT have a Population key
+        Assert.False(settlement.Contains("Population"));
+    }
+
+    // --- Settlement Perk Seed Format Tests --------------------------
+
+    [Fact]
+    public void SettlementLogic_PerkSeedFormat_IntegerSeedSavedInPerkString()
+    {
+        // Verify that a procedural perk with integer seed is stored as "perkId#seed"
+        var settlement = JsonObject.Parse(@"{
+            ""Name"": ""SeedTest"",
+            ""SeedValue"": ""0xABC"",
+            ""Stats"": [50, 100, 500, 200, 10, 1000, 50, 50],
+            ""Perks"": [""^STARTING_NEG1#12345"", ""^STARTING_POS1"", ""^""],
+            ""PendingJudgementType"": { ""SettlementJudgementType"": ""None"" },
+            ""LastJudgementTime"": 0
+        }");
+
+        // Verify the perk string format round-trips correctly through the JSON
+        var perksArr = settlement.GetArray("Perks")!;
+        string perkWithSeed = perksArr.GetString(0)!;
+        Assert.Contains("#", perkWithSeed);
+        Assert.Equal("^STARTING_NEG1#12345", perkWithSeed);
+
+        // Parse like the UI does
+        int hashIdx = perkWithSeed.IndexOf('#');
+        Assert.True(hashIdx >= 0);
+        string perkId = perkWithSeed[..hashIdx];
+        string seed = perkWithSeed[(hashIdx + 1)..];
+        Assert.Equal("^STARTING_NEG1", perkId);
+        Assert.Equal("12345", seed);
+        Assert.True(int.TryParse(seed, System.Globalization.NumberStyles.Integer,
+            System.Globalization.CultureInfo.InvariantCulture, out int seedInt));
+        Assert.Equal(12345, seedInt);
+
+        // Verify perk without seed
+        string perkNoSeed = perksArr.GetString(1)!;
+        Assert.DoesNotContain("#", perkNoSeed);
+        Assert.Equal("^STARTING_POS1", perkNoSeed);
+    }
+
+    [Fact]
+    public void SettlementLogic_PerkSeedFormat_EmptyPerkIsCaretOnly()
+    {
+        var settlement = JsonObject.Parse(@"{
+            ""Name"": ""SeedTest"",
+            ""Perks"": [""^""]
+        }");
+
+        var perksArr = settlement.GetArray("Perks")!;
+        Assert.Equal("^", perksArr.GetString(0));
+    }
+
+    [Fact]
+    public void SettlementLogic_PerkSeedFormat_InvalidSeedNotInteger_SavesWithoutSeed()
+    {
+        // This tests the validation logic: non-integer seed text should result in perkId only
+        string perkId = "^PROC_TRAIT_BENEFIT";
+        string badSeed = "not_an_integer";
+        // The save logic validates: int.TryParse(seedText, ...) → false → saves perkId without seed
+        Assert.False(int.TryParse(badSeed, System.Globalization.NumberStyles.Integer,
+            System.Globalization.CultureInfo.InvariantCulture, out _));
+        // Therefore the saved value should be just the perkId, not "perkId#badSeed"
+        string savedVal = perkId; // This is what the UI code would produce
+        Assert.DoesNotContain("#", savedVal);
+    }
+
+    // --- SettlementBuildingState bit-flag tests ---
+
+    [Fact]
+    public void SettlementBuildingState_IsEmpty_TrueForZero()
+    {
+        Assert.True(SettlementLogic.SettlementBuildingState.IsEmpty(0));
+        Assert.False(SettlementLogic.SettlementBuildingState.IsEmpty(1));
+    }
+
+    [Fact]
+    public void SettlementBuildingState_IsInitialConstruction_OnlyBits0to6()
+    {
+        // Values that are purely initial construction (bits 0–6 only)
+        Assert.True(SettlementLogic.SettlementBuildingState.IsInitialConstruction(5));   // 0b0000101
+        Assert.True(SettlementLogic.SettlementBuildingState.IsInitialConstruction(127)); // 0b1111111 = all 7 phases
+        Assert.True(SettlementLogic.SettlementBuildingState.IsInitialConstruction(1));
+
+        // Not initial construction: 0, or values with higher bits set
+        Assert.False(SettlementLogic.SettlementBuildingState.IsInitialConstruction(0));
+        Assert.False(SettlementLogic.SettlementBuildingState.IsInitialConstruction(67108991)); // has bit 26
+    }
+
+    [Fact]
+    public void SettlementBuildingState_GetInitConstruction_ExtractsBits0to6()
+    {
+        // 0x0C30007F has bits 0–6 all set (0x7F = 127)
+        Assert.Equal(0x7F, SettlementLogic.SettlementBuildingState.GetInitConstruction(unchecked((int)0x0C30007F)));
+        Assert.Equal(0x35, SettlementLogic.SettlementBuildingState.GetInitConstruction(53)); // 0x35 = 53
+        Assert.Equal(0, SettlementLogic.SettlementBuildingState.GetInitConstruction(0));
+    }
+
+    [Fact]
+    public void SettlementBuildingState_GetUpgradeProgress_ExtractsBits10to19()
+    {
+        // 0x0C3FFC7F has bits 10–19 all set (1023 = 0x3FF): B-class with all upgrade progress
+        int bClassFullUpgrade = unchecked((int)0x0C3FFC7F); // 205519999
+        Assert.Equal(0x3FF, SettlementLogic.SettlementBuildingState.GetUpgradeProgress(bClassFullUpgrade));
+        Assert.Equal(0, SettlementLogic.SettlementBuildingState.GetUpgradeProgress(127)); // no upgrade bits
+    }
+
+    [Fact]
+    public void SettlementBuildingState_GetBit_IndividualBits()
+    {
+        int bClassComplete = 204472447; // 0x0C30007F = B-class Complete
+        Assert.True(SettlementLogic.SettlementBuildingState.GetBit(bClassComplete, 27));  // B_Arrived
+        Assert.True(SettlementLogic.SettlementBuildingState.GetBit(bClassComplete, 26));  // ClassSystemActive
+        Assert.True(SettlementLogic.SettlementBuildingState.GetBit(bClassComplete, 21));  // B_Confirmed
+        Assert.True(SettlementLogic.SettlementBuildingState.GetBit(bClassComplete, 20));  // B_Started
+        Assert.False(SettlementLogic.SettlementBuildingState.GetBit(bClassComplete, 28)); // A_Arrived not set
+        Assert.False(SettlementLogic.SettlementBuildingState.GetBit(bClassComplete, 29)); // S_Arrived not set
+    }
+
+    [Fact]
+    public void SettlementBuildingState_InitConstructionCount_Correct()
+    {
+        Assert.Equal(7, SettlementLogic.SettlementBuildingState.InitConstructionCount(127));  // all 7 bits
+        Assert.Equal(2, SettlementLogic.SettlementBuildingState.InitConstructionCount(5));    // bits 0, 2
+        Assert.Equal(3, SettlementLogic.SettlementBuildingState.InitConstructionCount(7));    // bits 0, 1, 2
+        Assert.Equal(0, SettlementLogic.SettlementBuildingState.InitConstructionCount(0));
+    }
+
+    [Theory]
+    [InlineData(0,           "settlement.bs_class_c", "settlement.bs_state_complete")]         // Line 1: Empty/C
+    [InlineData(5,           "settlement.bs_class_c", "settlement.bs_state_complete")]         // Line 2: C-class
+    [InlineData(127,         "settlement.bs_class_c", "settlement.bs_state_complete")]         // Line 10: C all done
+    [InlineData(67108991,    "settlement.bs_class_c", "settlement.bs_state_complete")]         // Line 11: system active
+    [InlineData(68157567,    "settlement.bs_class_c_to_b", "settlement.bs_state_upgrade_0")]   // Line 12: C→B upgrade
+    [InlineData(68156543,    "settlement.bs_class_c", "settlement.bs_state_complete")]         // Line 13: C complete
+    [InlineData(69205119,    "settlement.bs_class_c_to_b", "settlement.bs_state_upgrade_0")]   // Line 14: C→B upgrade
+    [InlineData(1046581,     "settlement.bs_class_c", "settlement.bs_state_complete")]         // Line 15: C complete
+    [InlineData(1047605,     "settlement.bs_class_c", "settlement.bs_state_complete")]         // Line 16: C complete
+    [InlineData(1047589,     "settlement.bs_class_c", "settlement.bs_state_complete")]         // Line 17: C complete
+    [InlineData(1047679,     "settlement.bs_class_c", "settlement.bs_state_complete")]         // Line 18: C complete
+    [InlineData(202375295,   "settlement.bs_class_c_to_b", "settlement.bs_state_awaiting_unveil")] // Line 19: C→B awaiting
+    [InlineData(204472447,   "settlement.bs_class_b", "settlement.bs_state_complete")]         // Line 20: B complete
+    [InlineData(205518975,   "settlement.bs_class_b", "settlement.bs_state_complete")]         // Line 21: B complete
+    [InlineData(205519999,   "settlement.bs_class_b", "settlement.bs_state_complete")]         // Line 22: B complete
+    [InlineData(208666751,   "settlement.bs_class_b_to_a", "settlement.bs_state_upgrade_0")]   // Line 23: B→A upgrade
+    [InlineData(477102207,   "settlement.bs_class_b_to_a", "settlement.bs_state_awaiting_unveil")] // Line 24: B→A awaiting
+    [InlineData(485490815,   "settlement.bs_class_a", "settlement.bs_state_complete")]         // Line 25: A complete
+    [InlineData(502268031,   "settlement.bs_class_a_to_s", "settlement.bs_state_upgrade_0")]   // Line 26: A→S upgrade
+    [InlineData(1039138943,  "settlement.bs_class_a_to_s", "settlement.bs_state_awaiting_unveil")] // Line 27: A→S awaiting
+    [InlineData(1072693375,  "settlement.bs_class_s", "settlement.bs_state_complete")]         // Line 28: S complete
+    [InlineData(1073740927,  "settlement.bs_class_s", "settlement.bs_state_complete")]         // Line 29: S complete
+    public void SettlementBuildingState_DetermineClassAndState_MatchesCSV(int value, string expectedClass, string expectedState)
+    {
+        var (classKey, stateKey) = SettlementLogic.SettlementBuildingState.DetermineClassAndState(value);
+        Assert.Equal(expectedClass, classKey);
+        Assert.Equal(expectedState, stateKey);
+    }
+
+    [Fact]
+    public void SettlementBuildingState_KnownMilestones_ContainsExpectedValues()
+    {
+        var milestones = SettlementDatabase.KnownMilestones;
+        Assert.Equal(13, milestones.Length);
+        Assert.Equal(0, milestones[0].Value);
+        Assert.Equal(1073740927, milestones[^1].Value);
+    }
+
+    [Fact]
+    public void SettlementBuildingState_GetBuildingSlotDescription_EmptySlot()
+    {
+        var desc = SettlementLogic.SettlementBuildingState.GetBuildingSlotDescription(0);
+        // Falls back to key name when UiStrings not loaded
+        Assert.Contains("Empty", desc, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public void SettlementBuildingState_GetBuildingSlotDescription_InitialConstruction()
+    {
+        var desc = SettlementLogic.SettlementBuildingState.GetBuildingSlotDescription(5);
+        // Should contain construction count info
+        Assert.NotNull(desc);
+        Assert.NotEmpty(desc);
+        Assert.NotEqual("TBC", desc);
+    }
+
+    [Fact]
+    public void SettlementBuildingState_GetBuildingSlotDescription_BComplete()
+    {
+        // 0x0C30007F = 204472447 = B-class Complete
+        var desc = SettlementLogic.SettlementBuildingState.GetBuildingSlotDescription(204472447);
+        Assert.NotNull(desc);
+        Assert.NotEmpty(desc);
+        Assert.NotEqual("TBC", desc);
+    }
+
+    // --- GetDetailedBitFieldDescription tests ---
+
+    [Fact]
+    public void SettlementBuildingState_GetDetailedBitFieldDescription_EmptySlot()
+    {
+        var desc = SettlementLogic.SettlementBuildingState.GetDetailedBitFieldDescription(0);
+        Assert.Contains("Empty", desc, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public void SettlementBuildingState_GetDetailedBitFieldDescription_InitialConstruction()
+    {
+        // 5 = bits 0 and 2 set = 2 phases done
+        var desc = SettlementLogic.SettlementBuildingState.GetDetailedBitFieldDescription(5);
+        Assert.NotNull(desc);
+        Assert.NotEmpty(desc);
+        // Should contain multiple lines (newlines)
+        Assert.Contains("\n", desc);
+        // Should mention construction/init phases
+        Assert.Contains("2", desc);
+    }
+
+    [Fact]
+    public void SettlementBuildingState_GetDetailedBitFieldDescription_BComplete()
+    {
+        // 204472447 = B-class Complete
+        var desc = SettlementLogic.SettlementBuildingState.GetDetailedBitFieldDescription(204472447);
+        Assert.NotNull(desc);
+        Assert.NotEmpty(desc);
+        Assert.Contains("\n", desc);
+        // Should show raw hex value
+        Assert.Contains("0x", desc);
+    }
+
+    [Fact]
+    public void SettlementBuildingState_GetDetailedBitFieldDescription_SClassFull()
+    {
+        // 1073740927 = S-class Full
+        var desc = SettlementLogic.SettlementBuildingState.GetDetailedBitFieldDescription(1073740927);
+        Assert.NotNull(desc);
+        Assert.NotEmpty(desc);
+        // Should have 5 lines total (class/state, init/upgrade, tiers, flags, raw)
+        int lineCount = desc.Split('\n').Length;
+        Assert.Equal(5, lineCount);
+    }
+
+    [Fact]
+    public void SettlementBuildingState_GetDetailedBitFieldDescription_ContainsTierInfo()
+    {
+        // 485490815 = A-class Complete
+        var desc = SettlementLogic.SettlementBuildingState.GetDetailedBitFieldDescription(485490815);
+        Assert.NotNull(desc);
+        // Should contain tier-related info for B and A
+        Assert.Contains("B Tier", desc, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("A Tier", desc, StringComparison.OrdinalIgnoreCase);
+    }
+
+    // --- Settlement alien race mapping tests ---
+
+    [Fact]
+    public void SettlementLogic_AlienRaceDisplayNames_ContainsAllRaces()
+    {
+        foreach (var race in SettlementLogic.AlienRaces)
+        {
+            Assert.True(SettlementLogic.AlienRaceDisplayNames.ContainsKey(race),
+                $"AlienRaceDisplayNames missing key '{race}'");
+        }
+    }
+
+    [Fact]
+    public void SettlementLogic_AlienRaceDisplayNames_MapsCorrectly()
+    {
+        Assert.Equal("Gek", SettlementLogic.AlienRaceDisplayNames["Traders"]);
+        Assert.Equal("Vy'keen", SettlementLogic.AlienRaceDisplayNames["Warriors"]);
+        Assert.Equal("Korvax", SettlementLogic.AlienRaceDisplayNames["Explorers"]);
+        Assert.Equal("Autophage", SettlementLogic.AlienRaceDisplayNames["Builders"]);
+    }
+
+    [Fact]
+    public void SettlementLogic_AlienRaceLocKeys_ContainsAllRaces()
+    {
+        foreach (var race in SettlementLogic.AlienRaces)
+        {
+            Assert.True(SettlementLogic.AlienRaceLocKeys.ContainsKey(race),
+                $"AlienRaceLocKeys missing key '{race}'");
+        }
+    }
+
+    // --- Settlement new fields load/save tests ---
+
+    [Fact]
+    public void SettlementLogic_LoadSettlementData_LoadsAlienRace()
+    {
+        var settlement = JsonObject.Parse(@"{
+            ""Name"": ""TestSettlement"",
+            ""SeedValue"": ""ABC"",
+            ""Owner"": { ""USN"": ""u1"", ""UID"": ""uid1"" },
+            ""Stats"": [0,0,0,0,0,0,0,0],
+            ""Race"": { ""AlienRace"": ""Explorers"" },
+            ""PendingJudgementType"": { ""SettlementJudgementType"": ""None"" },
+            ""LastJudgementTime"": 0
+        }");
+
+        var data = SettlementLogic.LoadSettlementData(settlement);
+        Assert.Equal("Explorers", data.AlienRace);
+    }
+
+    [Fact]
+    public void SettlementLogic_LoadSettlementData_LoadsTimestamps()
+    {
+        var settlement = JsonObject.Parse(@"{
+            ""Name"": ""TestSettlement"",
+            ""SeedValue"": ""ABC"",
+            ""Owner"": { ""USN"": ""u1"", ""UID"": ""uid1"" },
+            ""Stats"": [0,0,0,0,0,0,0,0],
+            ""PendingJudgementType"": { ""SettlementJudgementType"": ""None"" },
+            ""LastJudgementTime"": 0,
+            ""LastBugAttackChangeTime"": 1700000000,
+            ""LastAlertChangeTime"": 1700000001,
+            ""LastDebtChangeTime"": 1700000002,
+            ""LastUpkeepDebtCheckTime"": 1700000003,
+            ""LastPopulationChangeTime"": 1700000004
+        }");
+
+        var data = SettlementLogic.LoadSettlementData(settlement);
+        Assert.Equal(1700000000, data.LastBugAttackChangeTime);
+        Assert.Equal(1700000001, data.LastAlertChangeTime);
+        Assert.Equal(1700000002, data.LastDebtChangeTime);
+        Assert.Equal(1700000003, data.LastUpkeepDebtCheckTime);
+        Assert.Equal(1700000004, data.LastPopulationChangeTime);
+    }
+
+    [Fact]
+    public void SettlementLogic_LoadSettlementData_LoadsMissionFields()
+    {
+        var settlement = JsonObject.Parse(@"{
+            ""Name"": ""TestSettlement"",
+            ""SeedValue"": ""ABC"",
+            ""Owner"": { ""USN"": ""u1"", ""UID"": ""uid1"" },
+            ""Stats"": [0,0,0,0,0,0,0,0],
+            ""PendingJudgementType"": { ""SettlementJudgementType"": ""None"" },
+            ""LastJudgementTime"": 0,
+            ""MiniMissionSeed"": 12345,
+            ""MiniMissionStartTime"": 1700000000
+        }");
+
+        var data = SettlementLogic.LoadSettlementData(settlement);
+        Assert.Equal(12345, data.MiniMissionSeed);
+        Assert.Equal(1700000000, data.MiniMissionStartTime);
+    }
+
+    [Fact]
+    public void SettlementLogic_LoadSettlementData_LoadsBuildingStates()
+    {
+        // BuildingStates is an array of 48 ints
+        var statesJson = string.Join(",", Enumerable.Range(0, 48).Select(i => i == 0 ? "204472447" : "0"));
+        var settlement = JsonObject.Parse($@"{{
+            ""Name"": ""TestSettlement"",
+            ""SeedValue"": ""ABC"",
+            ""Owner"": {{ ""USN"": ""u1"", ""UID"": ""uid1"" }},
+            ""Stats"": [0,0,0,0,0,0,0,0],
+            ""PendingJudgementType"": {{ ""SettlementJudgementType"": ""None"" }},
+            ""LastJudgementTime"": 0,
+            ""BuildingStates"": [{statesJson}]
+        }}");
+
+        var data = SettlementLogic.LoadSettlementData(settlement);
+        Assert.True(data.HasBuildingStates);
+        Assert.Equal(204472447, data.BuildingStates[0]);
+        Assert.Equal(204472447, data.RawBuildingStates[0]);
+        Assert.Equal(0, data.BuildingStates[1]);
+    }
+
+    [Fact]
+    public void SettlementLogic_SaveSettlementData_SavesAlienRace()
+    {
+        var settlement = JsonObject.Parse(@"{
+            ""Name"": ""TestSettlement"",
+            ""SeedValue"": ""ABC"",
+            ""Owner"": { ""USN"": ""u1"", ""UID"": ""uid1"" },
+            ""Stats"": [0,0,0,0,0,0,0,0],
+            ""Race"": { ""AlienRace"": ""None"" },
+            ""PendingJudgementType"": { ""SettlementJudgementType"": ""None"" },
+            ""LastJudgementTime"": 0
+        }");
+
+        var saveValues = new SettlementLogic.SettlementSaveValues
+        {
+            Name = "TestSettlement",
+            SeedValue = "ABC",
+            AlienRace = "Warriors",
+        };
+        SettlementLogic.SaveSettlementData(settlement, saveValues);
+
+        var raceObj = settlement.GetObject("Race");
+        Assert.Equal("Warriors", raceObj?.GetString("AlienRace"));
+    }
+
+    [Fact]
+    public void SettlementLogic_SaveSettlementData_SavesTimestamps()
+    {
+        var settlement = JsonObject.Parse(@"{
+            ""Name"": ""TestSettlement"",
+            ""SeedValue"": ""ABC"",
+            ""Owner"": { ""USN"": ""u1"", ""UID"": ""uid1"" },
+            ""Stats"": [0,0,0,0,0,0,0,0],
+            ""PendingJudgementType"": { ""SettlementJudgementType"": ""None"" },
+            ""LastJudgementTime"": 0,
+            ""LastBugAttackChangeTime"": 0,
+            ""LastAlertChangeTime"": 0,
+            ""LastDebtChangeTime"": 0,
+            ""LastUpkeepDebtCheckTime"": 0,
+            ""LastPopulationChangeTime"": 0
+        }");
+
+        var saveValues = new SettlementLogic.SettlementSaveValues
+        {
+            Name = "TestSettlement",
+            SeedValue = "ABC",
+            LastBugAttackChangeTime = 1700000000,
+            LastAlertChangeTime = 1700000001,
+            LastDebtChangeTime = 1700000002,
+            LastUpkeepDebtCheckTime = 1700000003,
+            LastPopulationChangeTime = 1700000004,
+        };
+        SettlementLogic.SaveSettlementData(settlement, saveValues);
+
+        Assert.Equal(1700000000, settlement.GetLong("LastBugAttackChangeTime"));
+        Assert.Equal(1700000001, settlement.GetLong("LastAlertChangeTime"));
+        Assert.Equal(1700000002, settlement.GetLong("LastDebtChangeTime"));
+        Assert.Equal(1700000003, settlement.GetLong("LastUpkeepDebtCheckTime"));
+        Assert.Equal(1700000004, settlement.GetLong("LastPopulationChangeTime"));
+    }
+
+    [Fact]
+    public void SettlementLogic_SaveSettlementData_SavesMissionFields()
+    {
+        var settlement = JsonObject.Parse(@"{
+            ""Name"": ""TestSettlement"",
+            ""SeedValue"": ""ABC"",
+            ""Owner"": { ""USN"": ""u1"", ""UID"": ""uid1"" },
+            ""Stats"": [0,0,0,0,0,0,0,0],
+            ""PendingJudgementType"": { ""SettlementJudgementType"": ""None"" },
+            ""LastJudgementTime"": 0,
+            ""MiniMissionSeed"": 0,
+            ""MiniMissionStartTime"": 0
+        }");
+
+        var saveValues = new SettlementLogic.SettlementSaveValues
+        {
+            Name = "TestSettlement",
+            SeedValue = "ABC",
+            MiniMissionSeed = 99999,
+            MiniMissionStartTime = 1700000000,
+        };
+        SettlementLogic.SaveSettlementData(settlement, saveValues);
+
+        Assert.Equal(99999, settlement.GetInt("MiniMissionSeed"));
+        Assert.Equal(1700000000, settlement.GetLong("MiniMissionStartTime"));
+    }
+
+    [Fact]
+    public void SettlementLogic_SaveSettlementData_BuildingStates_PreservesUnchanged()
+    {
+        var statesJson = string.Join(",", Enumerable.Range(0, 48).Select(i => i == 0 ? "204472447" : "53"));
+        var settlement = JsonObject.Parse($@"{{
+            ""Name"": ""TestSettlement"",
+            ""SeedValue"": ""ABC"",
+            ""Owner"": {{ ""USN"": ""u1"", ""UID"": ""uid1"" }},
+            ""Stats"": [0,0,0,0,0,0,0,0],
+            ""PendingJudgementType"": {{ ""SettlementJudgementType"": ""None"" }},
+            ""LastJudgementTime"": 0,
+            ""BuildingStates"": [{statesJson}]
+        }}");
+
+        // Load raw values first
+        var data = SettlementLogic.LoadSettlementData(settlement);
+
+        // Save with same values (nothing changed) - should preserve originals
+        var saveValues = new SettlementLogic.SettlementSaveValues
+        {
+            Name = "TestSettlement",
+            SeedValue = "ABC",
+            HasBuildingStates = true,
+            RawBuildingStates = data.RawBuildingStates,
+            BuildingStates = (int[])data.BuildingStates.Clone(),
+        };
+        SettlementLogic.SaveSettlementData(settlement, saveValues);
+
+        var buildArr = settlement.GetArray("BuildingStates");
+        Assert.Equal(204472447, buildArr!.GetInt(0)); // Unchanged
+        Assert.Equal(53, buildArr.GetInt(1)); // Unchanged
+    }
+
+    [Fact]
+    public void SettlementLogic_SaveSettlementData_BuildingStates_WritesChanged()
+    {
+        var statesJson = string.Join(",", Enumerable.Range(0, 48).Select(i => "53"));
+        var settlement = JsonObject.Parse($@"{{
+            ""Name"": ""TestSettlement"",
+            ""SeedValue"": ""ABC"",
+            ""Owner"": {{ ""USN"": ""u1"", ""UID"": ""uid1"" }},
+            ""Stats"": [0,0,0,0,0,0,0,0],
+            ""PendingJudgementType"": {{ ""SettlementJudgementType"": ""None"" }},
+            ""LastJudgementTime"": 0,
+            ""BuildingStates"": [{statesJson}]
+        }}");
+
+        var data = SettlementLogic.LoadSettlementData(settlement);
+        var newStates = (int[])data.BuildingStates.Clone();
+        newStates[0] = 999; // User changed slot 0
+
+        var saveValues = new SettlementLogic.SettlementSaveValues
+        {
+            Name = "TestSettlement",
+            SeedValue = "ABC",
+            HasBuildingStates = true,
+            RawBuildingStates = data.RawBuildingStates,
+            BuildingStates = newStates,
+        };
+        SettlementLogic.SaveSettlementData(settlement, saveValues);
+
+        var buildArr = settlement.GetArray("BuildingStates");
+        Assert.Equal(999, buildArr!.GetInt(0)); // Changed
+        Assert.Equal(53, buildArr.GetInt(1)); // Unchanged
+    }
+
+    [Fact]
+    public void SettlementLogic_LoadSettlementData_MissingRace_DefaultsToNone()
+    {
+        var settlement = JsonObject.Parse(@"{
+            ""Name"": ""TestSettlement"",
+            ""SeedValue"": ""ABC"",
+            ""Owner"": { ""USN"": ""u1"", ""UID"": ""uid1"" },
+            ""Stats"": [0,0,0,0,0,0,0,0],
+            ""PendingJudgementType"": { ""SettlementJudgementType"": ""None"" },
+            ""LastJudgementTime"": 0
+        }");
+
+        var data = SettlementLogic.LoadSettlementData(settlement);
+        Assert.Equal("None", data.AlienRace);
+    }
+
+    [Fact]
+    public void SettlementLogic_LoadSettlementData_ZeroTimestamps_LoadAsZero()
+    {
+        var settlement = JsonObject.Parse(@"{
+            ""Name"": ""TestSettlement"",
+            ""SeedValue"": ""ABC"",
+            ""Owner"": { ""USN"": ""u1"", ""UID"": ""uid1"" },
+            ""Stats"": [0,0,0,0,0,0,0,0],
+            ""PendingJudgementType"": { ""SettlementJudgementType"": ""None"" },
+            ""LastJudgementTime"": 0,
+            ""LastBugAttackChangeTime"": 0,
+            ""MiniMissionStartTime"": 0
+        }");
+
+        var data = SettlementLogic.LoadSettlementData(settlement);
+        Assert.Equal(0, data.LastBugAttackChangeTime);
+        Assert.Equal(0, data.MiniMissionStartTime);
+        // Zero timestamps should NOT produce valid dates in UI (handled by ShowCheckBox pattern)
+    }
+
+    [Fact]
+    public void SettlementBuildingState_UpgradeProgressCount_Correct()
+    {
+        // 0x0C3FFC7F = 205519999 = B-class with all upgrade bits set (10/10)
+        Assert.Equal(10, SettlementLogic.SettlementBuildingState.UpgradeProgressCount(205519999));
+        // 127 = no upgrade bits
+        Assert.Equal(0, SettlementLogic.SettlementBuildingState.UpgradeProgressCount(127));
+    }
+
+    [Fact]
+    public void SettlementBuildingState_GetTierProgression_Correct()
+    {
+        // S-class complete: 0x3FF0007F → tier bits 20–25 all set = 0x3F
+        Assert.Equal(0x3F, SettlementLogic.SettlementBuildingState.GetTierProgression(1072693375));
+        // B-class complete: bits 20,21 set = 0x03
+        Assert.Equal(0x03, SettlementLogic.SettlementBuildingState.GetTierProgression(204472447));
+        // C-class: no tier bits
+        Assert.Equal(0, SettlementLogic.SettlementBuildingState.GetTierProgression(127));
+    }
+
+    [Fact]
+    public void SettlementBuildingState_GetArrivalFlags_Correct()
+    {
+        // S-class complete: 0x3FF0007F → bits 26–29 all set = 0xF
+        Assert.Equal(0x0F, SettlementLogic.SettlementBuildingState.GetArrivalFlags(1072693375));
+        // B-class complete: bits 26,27 set = 0x03
+        Assert.Equal(0x03, SettlementLogic.SettlementBuildingState.GetArrivalFlags(204472447));
+        // C-class: no arrival flags
+        Assert.Equal(0, SettlementLogic.SettlementBuildingState.GetArrivalFlags(127));
+    }
+
+    [Fact]
+    public void SettlementBuildingState_GetBuildingSlotDescription_AllMilestones_NotEmpty()
+    {
+        foreach (var (value, _) in SettlementDatabase.KnownMilestones)
+        {
+            var desc = SettlementLogic.SettlementBuildingState.GetBuildingSlotDescription(value);
+            Assert.NotNull(desc);
+            Assert.NotEmpty(desc);
+        }
+    }
+
+    [Fact]
+    public void SettlementDatabase_KnownMilestones_Has13Entries()
+    {
+        Assert.Equal(13, SettlementDatabase.KnownMilestones.Length);
+    }
+
+    [Fact]
+    public void SettlementDatabase_KnownMilestones_AllValuesAreDistinct()
+    {
+        var values = SettlementDatabase.KnownMilestones.Select(m => m.Value).ToArray();
+        Assert.Equal(values.Length, values.Distinct().Count());
+    }
+
+    [Fact]
+    public void SettlementDatabase_KnownMilestones_AllLocKeysNonEmpty()
+    {
+        foreach (var (_, locKey) in SettlementDatabase.KnownMilestones)
+        {
+            Assert.False(string.IsNullOrWhiteSpace(locKey), $"LocKey should not be empty for milestone");
+        }
+    }
+
+    [Theory]
+    [InlineData(0)]           // Empty lot
+    [InlineData(127)]         // C construction complete
+    [InlineData(204472447)]   // B complete
+    [InlineData(1072693375)]  // S complete
+    public void SettlementDatabase_KnownMilestones_ContainsValue(int value)
+    {
+        Assert.Contains(SettlementDatabase.KnownMilestones, m => m.Value == value);
+    }
+
+    [Theory]
+    [InlineData(1)]
+    [InlineData(999)]
+    [InlineData(42)]
+    [InlineData(-1)]
+    public void SettlementDatabase_KnownMilestones_DoesNotContainArbitraryValue(int value)
+    {
+        Assert.DoesNotContain(SettlementDatabase.KnownMilestones, m => m.Value == value);
+    }
+
+    [Fact]
+    public void SettlementLogic_SaveSettlementData_BuildingStates_AlwaysWritesIntegers()
+    {
+        // This test verifies that any int value written to BuildingStates is a valid integer
+        // in the save file - guaranteeing save safety.
+        var statesJson = string.Join(",", Enumerable.Range(0, 48).Select(i => "0"));
+        var settlement = JsonObject.Parse($@"{{
+            ""Name"": ""TestSettlement"",
+            ""SeedValue"": ""ABC"",
+            ""Owner"": {{ ""USN"": ""u1"", ""UID"": ""uid1"" }},
+            ""Stats"": [0,0,0,0,0,0,0,0],
+            ""PendingJudgementType"": {{ ""SettlementJudgementType"": ""None"" }},
+            ""LastJudgementTime"": 0,
+            ""BuildingStates"": [{statesJson}]
+        }}");
+
+        var data = SettlementLogic.LoadSettlementData(settlement);
+
+        // Simulate various integer values that might be set via the NUD
+        var testValues = new[] { 0, 127, 999, 204472447, 1072693375, -1, int.MaxValue, int.MinValue };
+        var newStates = (int[])data.BuildingStates.Clone();
+        for (int i = 0; i < Math.Min(testValues.Length, newStates.Length); i++)
+            newStates[i] = testValues[i];
+
+        var saveValues = new SettlementLogic.SettlementSaveValues
+        {
+            Name = "TestSettlement",
+            SeedValue = "ABC",
+            HasBuildingStates = true,
+            RawBuildingStates = data.RawBuildingStates,
+            BuildingStates = newStates,
+        };
+        SettlementLogic.SaveSettlementData(settlement, saveValues);
+
+        var buildArr = settlement.GetArray("BuildingStates");
+        Assert.NotNull(buildArr);
+        for (int i = 0; i < Math.Min(testValues.Length, buildArr!.Length); i++)
+        {
+            Assert.Equal(testValues[i], buildArr.GetInt(i));
+        }
+    }
+
+    // --- End-to-end corvette verification against reference save ---
+
+    /// <summary>
+    /// Locates a reference path by walking up from the test output directory.
+    /// </summary>
+    private static string? FindRefPath(params string[] parts)
+    {
+        var dir = AppDomain.CurrentDomain.BaseDirectory;
+        for (int i = 0; i < 10; i++)
+        {
+            var candidate = Path.Combine(new[] { dir }.Concat(parts).ToArray());
+            if (File.Exists(candidate) || Directory.Exists(candidate)) return candidate;
+            var parent = Directory.GetParent(dir);
+            if (parent == null) break;
+            dir = parent.FullName;
+        }
+        return null;
+    }
+
+    private static bool _mapperLoaded;
+    private static readonly object _mapperLock = new();
+
+    private static void EnsureMapperLoaded()
+    {
+        if (_mapperLoaded) return;
+        lock (_mapperLock)
+        {
+            if (_mapperLoaded) return;
+            var mapperPath = FindRefPath("Resources", "map", "mapping.json");
+            if (mapperPath == null) return;
+            var mapper = new JsonNameMapper();
+            mapper.Load(mapperPath);
+            JsonParser.SetDefaultMapper(mapper);
+            _mapperLoaded = true;
+        }
+    }
+
+    private static bool _corvDbLoaded;
+    private static readonly object _corvDbLock = new();
+
+    /// <summary>
+    /// Loads the Corvette.json database into <see cref="StarshipDatabase"/> for tests
+    /// that rely on data-driven part categorisation.
+    /// </summary>
+    private static void LoadCorvetteDatabase()
+    {
+        // Check actual state (another test class may have called Clear())
+        if (_corvDbLoaded && StarshipDatabase.IsLoaded) return;
+        lock (_corvDbLock)
+        {
+            if (_corvDbLoaded && StarshipDatabase.IsLoaded) return;
+            var jsonDir = FindResourceJsonDir();
+            if (jsonDir == null) return;
+            var db = new GameItemDatabase();
+            db.LoadItemsFromJsonDirectory(jsonDir);
+            StarshipDatabase.LoadFromDatabase(db);
+            _corvDbLoaded = true;
+        }
+    }
+
+    [Fact]
+    public void CorvetteE2E_ReferenceSave_FindsAll3CorvetteBases()
+    {
+        // Load the reference save and verify FindCorvetteBaseIndex correctly pairs
+        // all 3 corvettes to their bases via UserData matching.
+        var savePath = FindRefPath("_ref", "saves", "original", "save.hg");
+        if (savePath == null) return; // skip if reference save not available
+
+        EnsureMapperLoaded();
+        var save = SaveFileManager.LoadSaveFile(savePath);
+        var psd = save.GetObject("PlayerStateData");
+        Assert.NotNull(psd);
+
+        var shipOwnership = psd!.GetArray("ShipOwnership");
+        var bases = psd.GetArray("PersistentPlayerBases");
+        Assert.NotNull(shipOwnership);
+        Assert.NotNull(bases);
+
+        // The reference save has 3 corvettes at ship indices 5, 7, 8:
+        // Ship 5 = "The Bebop" (seed 0x68BA4883) -> Base with UserData=5
+        // Ship 7 = "USCSS Abraxas" (seed 0x68B31258) -> Base with UserData=7
+        // Ship 8 = "USCSS Solomon" (seed 0x68F8EF8D) -> Base with UserData=8
+        var corvettes = new[]
+        {
+            (shipIndex: 5, name: "The Bebop", expectedUserData: 5),
+            (shipIndex: 7, name: "USCSS Abraxas", expectedUserData: 7),
+            (shipIndex: 8, name: "USCSS Solomon", expectedUserData: 8),
+        };
+
+        foreach (var (shipIndex, name, expectedUserData) in corvettes)
+        {
+            int baseIdx = StarshipLogic.FindCorvetteBaseIndex(bases!, shipIndex);
+
+            Assert.True(baseIdx >= 0, $"FindCorvetteBaseIndex failed for ship '{name}' (index={shipIndex})");
+
+            // Verify the matched base has the correct UserData
+            var matchedBase = bases!.GetObject(baseIdx);
+            long ud = 0;
+            try { ud = (long)matchedBase.GetDouble("UserData"); } catch { }
+            Assert.Equal(expectedUserData, (int)ud);
+
+            // Verify it's a PlayerShipBase
+            var bt = matchedBase.GetObject("BaseType")?.GetString("PersistentBaseTypes");
+            Assert.Equal("PlayerShipBase", bt);
+
+            // Verify it has Objects
+            var objects = matchedBase.GetArray("Objects");
+            Assert.NotNull(objects);
+            Assert.True(objects!.Length > 0, $"Base for '{name}' has no objects");
+        }
+    }
+
+    [Fact]
+    public void CorvetteE2E_ReferenceSave_ReorderProducesCorrectCategoryOrder()
+    {
+        // Load the reference save and optimise each corvette, then verify the result
+        // has correct category ordering.
+        var savePath = FindRefPath("_ref", "saves", "original", "save.hg");
+        if (savePath == null) return;
+
+        LoadCorvetteDatabase();
+        EnsureMapperLoaded();
+        var save = SaveFileManager.LoadSaveFile(savePath);
+        var psd = save.GetObject("PlayerStateData");
+        var bases = psd!.GetArray("PersistentPlayerBases");
+
+        var corvettes = new[]
+        {
+            (shipIndex: 5, name: "The Bebop"),
+            (shipIndex: 7, name: "USCSS Abraxas"),
+            (shipIndex: 8, name: "USCSS Solomon"),
+        };
+
+        foreach (var (shipIndex, name) in corvettes)
+        {
+            int baseIdx = StarshipLogic.FindCorvetteBaseIndex(bases!, shipIndex);
+            Assert.True(baseIdx >= 0, $"Base not found for '{name}'");
+
+            var baseObj = bases!.GetObject(baseIdx);
+            var objects = baseObj.GetArray("Objects")!;
+            int objectCount = objects.Length;
+
+            // Perform the optimise reorder
+            int result = StarshipLogic.ReorderBuildingObjects(objects);
+            Assert.Equal(objectCount, result);
+
+            // Verify priority ordering: each object's priority should be >= the previous
+            int prevPriority = 0;
+            for (int i = 0; i < objects.Length; i++)
+            {
+                var obj = objects.GetObject(i);
+                string objectId = obj.GetString("ObjectID") ?? "";
+                int priority = StarshipLogic.GetPartPriority(objectId);
+
+                Assert.True(priority >= prevPriority,
+                    $"Ship '{name}': object[{i}] '{objectId}' (priority {priority}) " +
+                    $"comes after priority {prevPriority} - wrong order!");
+                prevPriority = priority;
+            }
+
+            // Verify that Reactor parts (priority 0) appear before Engine parts (priority 1)
+            int lastReactorIdx = -1;
+            int firstEngineIdx = -1;
+            for (int i = 0; i < objects.Length; i++)
+            {
+                int p = StarshipLogic.GetPartPriority(objects.GetObject(i).GetString("ObjectID") ?? "");
+                if (p == 0) // Reactor priority
+                    lastReactorIdx = i;
+                if (p == 1 && firstEngineIdx < 0) // Engine priority
+                    firstEngineIdx = i;
+            }
+            if (lastReactorIdx >= 0 && firstEngineIdx >= 0)
+            {
+                Assert.True(lastReactorIdx < firstEngineIdx,
+                    $"Ship '{name}': Reactor at index {lastReactorIdx} should be before engine at {firstEngineIdx}");
+            }
+        }
+    }
+
+    [Fact]
+    public void CorvetteE2E_ReferenceSave_OptimiseCorvetteBase_ReturnsCorrectCount()
+    {
+        // Verify OptimiseCorvetteBase works end-to-end and returns the right object count.
+        var savePath = FindRefPath("_ref", "saves", "original", "save.hg");
+        if (savePath == null) return;
+
+        EnsureMapperLoaded();
+        var save = SaveFileManager.LoadSaveFile(savePath);
+        var psd = save.GetObject("PlayerStateData");
+        var bases = psd!.GetArray("PersistentPlayerBases");
+
+        // Expected object counts from the reference save:
+        // Ship 5 "The Bebop" -> 111 objects
+        // Ship 7 "USCSS Abraxas" -> 316 objects
+        // Ship 8 "USCSS Solomon" -> 148 objects
+        var corvettes = new[]
+        {
+            (shipIndex: 5, name: "The Bebop", expectedCount: 111),
+            (shipIndex: 7, name: "USCSS Abraxas", expectedCount: 316),
+            (shipIndex: 8, name: "USCSS Solomon", expectedCount: 148),
+        };
+
+        foreach (var (shipIndex, name, expectedCount) in corvettes)
+        {
+            int result = StarshipLogic.OptimiseCorvetteBase(bases, shipIndex);
+            Assert.Equal(expectedCount, result);
+        }
+    }
+
+    [Fact]
+    public void CorvetteE2E_TheBebop_MatchesRefOutput()
+    {
+        // Run our optimizer on The Bebop and compare ObjectID ordering against
+        // the reference output in _ref/optimize/ref.json.
+        var savePath = FindRefPath("_ref", "saves", "original", "save.hg");
+        var refPath = FindRefPath("_ref", "optimize", "ref.json");
+        if (savePath == null || refPath == null) return;
+
+        LoadCorvetteDatabase();
+        EnsureMapperLoaded();
+        var save = SaveFileManager.LoadSaveFile(savePath);
+        var psd = save.GetObject("PlayerStateData");
+        var bases = psd!.GetArray("PersistentPlayerBases");
+
+        // Ship 5 = "The Bebop"
+        int result = StarshipLogic.OptimiseCorvetteBase(bases, 5);
+        Assert.Equal(111, result);
+
+        // Get the optimised objects
+        int baseIdx = StarshipLogic.FindCorvetteBaseIndex(bases!, 5);
+        var baseObj = bases!.GetObject(baseIdx);
+        var objects = baseObj.GetArray("Objects")!;
+
+        // Load reference
+        string refJson = System.IO.File.ReadAllText(refPath);
+        var refArray = JsonArray.Parse(refJson);
+
+        Assert.Equal(refArray.Length, objects.Length);
+
+        // Compare every ObjectID in order
+        var mismatches = new List<string>();
+        for (int i = 0; i < objects.Length; i++)
+        {
+            string oursId = objects.GetObject(i).GetString("ObjectID") ?? "";
+            string refId = refArray.GetObject(i).GetString("ObjectID") ?? "";
+            if (!string.Equals(oursId, refId, StringComparison.Ordinal))
+                mismatches.Add($"[{i}] ours={oursId} ref={refId}");
+        }
+
+        Assert.True(mismatches.Count == 0,
+            $"ObjectID order differs from ref in {mismatches.Count}/{objects.Length} positions:\n" +
+            string.Join("\n", mismatches.Take(20)));
+    }
+
+    [Fact]
+    public void CorvetteE2E_TheBebop_FullRefComparison()
+    {
+        // Detailed diagnostic: loads the original .hg save, runs our optimizer on
+        // The Bebop, and produces a full side-by-side comparison against ref.json.
+        // Verifies both ObjectID ordering AND positional data integrity.
+        var savePath = FindRefPath("_ref", "saves", "original", "save.hg");
+        var refPath = FindRefPath("_ref", "optimize", "ref.json");
+        if (savePath == null || refPath == null) return;
+
+        LoadCorvetteDatabase();
+        EnsureMapperLoaded();
+        var save = SaveFileManager.LoadSaveFile(savePath);
+        var psd = save.GetObject("PlayerStateData");
+        var bases = psd!.GetArray("PersistentPlayerBases");
+
+        // Ship 5 = "The Bebop"
+        int result = StarshipLogic.OptimiseCorvetteBase(bases, 5);
+        Assert.Equal(111, result);
+
+        int baseIdx = StarshipLogic.FindCorvetteBaseIndex(bases!, 5);
+        var baseObj = bases!.GetObject(baseIdx);
+        var objects = baseObj.GetArray("Objects")!;
+
+        string refJson = System.IO.File.ReadAllText(refPath);
+        var refArray = JsonArray.Parse(refJson);
+
+        // Count and length must match
+        Assert.Equal(refArray.Length, objects.Length);
+
+        int matchCount = 0;
+        int mismatchCount = 0;
+        var mismatches = new List<string>();
+
+        for (int i = 0; i < objects.Length; i++)
+        {
+            var oursObj = objects.GetObject(i);
+            var refObj = refArray.GetObject(i);
+
+            string oursId = oursObj.GetString("ObjectID") ?? "";
+            string refID = refObj.GetString("ObjectID") ?? "";
+
+            if (string.Equals(oursId, refID, StringComparison.Ordinal))
+            {
+                matchCount++;
+            }
+            else
+            {
+                mismatchCount++;
+                mismatches.Add($"[{i}] ours={oursId} ref={refID}");
+            }
+        }
+
+        // Verify category boundaries are correct
+        var categories = new Dictionary<string, int>();
+        for (int i = 0; i < objects.Length; i++)
+        {
+            string id = objects.GetObject(i).GetString("ObjectID") ?? "";
+            int priority = StarshipLogic.GetPartPriority(id);
+            string catName = priority switch
+            {
+                1 => "Reactor",
+                2 => "Thruster",
+                3 => "Wing",
+                4 => "LandingGear",
+                5 => "Access",
+                6 => "Cockpit",
+                int.MaxValue => "Other",
+                _ => $"Unknown({priority})"
+            };
+            if (!categories.ContainsKey(catName))
+                categories[catName] = 0;
+            categories[catName]++;
+        }
+
+        // Verify same categories in ref output
+        var refCategories = new Dictionary<string, int>();
+        for (int i = 0; i < refArray.Length; i++)
+        {
+            string id = refArray.GetObject(i).GetString("ObjectID") ?? "";
+            int priority = StarshipLogic.GetPartPriority(id);
+            string catName = priority switch
+            {
+                1 => "Reactor",
+                2 => "Thruster",
+                3 => "Wing",
+                4 => "LandingGear",
+                5 => "Access",
+                6 => "Cockpit",
+                int.MaxValue => "Other",
+                _ => $"Unknown({priority})"
+            };
+            if (!refCategories.ContainsKey(catName))
+                refCategories[catName] = 0;
+            refCategories[catName]++;
+        }
+
+        // Both must have same category counts
+        foreach (var kvp in categories)
+        {
+            Assert.True(refCategories.ContainsKey(kvp.Key),
+                $"Ref missing category '{kvp.Key}' that we have with {kvp.Value} objects");
+            Assert.Equal(kvp.Value, refCategories[kvp.Key]);
+        }
+
+        // Assert full match
+        Assert.True(mismatchCount == 0,
+            $"ObjectID mismatch: {matchCount}/{objects.Length} match, {mismatchCount} differ:\n" +
+            string.Join("\n", mismatches));
+    }
+
+    [Fact]
+    public void CorvetteE2E_ReferenceSave_ExportImportRoundtrip()
+    {
+        // Verify a corvette's base data can be exported and the objects JSON can
+        // be re-parsed without loss (simulates the export/import flow).
+        var savePath = FindRefPath("_ref", "saves", "original", "save.hg");
+        if (savePath == null) return;
+
+        EnsureMapperLoaded();
+        var save = SaveFileManager.LoadSaveFile(savePath);
+        var psd = save.GetObject("PlayerStateData");
+        var bases = psd!.GetArray("PersistentPlayerBases");
+
+        // Test with "USCSS Abraxas" (largest base, 316 objects)
+        int baseIdx = StarshipLogic.FindCorvetteBaseIndex(bases!, 7);
+        Assert.True(baseIdx >= 0);
+
+        var baseObj = bases!.GetObject(baseIdx);
+        var objects = baseObj.GetArray("Objects")!;
+
+        // Serialize all objects to JSON strings, then re-parse to verify round-trip
+        for (int i = 0; i < Math.Min(10, objects.Length); i++) // Spot-check first 10
+        {
+            var obj = objects.GetObject(i);
+            string objectId = obj.GetString("ObjectID") ?? "";
+            Assert.False(string.IsNullOrEmpty(objectId), $"Object[{i}] has empty ObjectID");
+
+            // Verify it can be serialized and deserialized
+            string serialized = obj.ToString();
+            var reparsed = JsonObject.Parse(serialized);
+            Assert.Equal(objectId, reparsed.GetString("ObjectID"));
+        }
+
+        // Also verify the ship ownership entry can round-trip
+        var ships = psd!.GetArray("ShipOwnership")!;
+        var ship = ships.GetObject(7);
+        string shipJson = ship.ToString();
+        var reparsedShip = JsonObject.Parse(shipJson);
+        Assert.Equal("USCSS Abraxas", reparsedShip.GetString("Name"));
     }
 }

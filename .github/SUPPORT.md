@@ -11,7 +11,7 @@ Start with the repository README.
 For bugs, feature requests, or questions:
 
 1. Search existing issues.
-2. Open a new issue using the templates in `.github/ISSUE_TEMPLATE/`.
+2. Open a new issue using the appropriate template and fill it in correctly.
 
 ## 💬 Community
 

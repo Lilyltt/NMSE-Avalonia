@@ -1,5 +1,6 @@
 using System.Buffers;
 using System.Text;
+using System.Text.Unicode;
 
 namespace NMSE.Models;
 
@@ -492,7 +493,7 @@ public static class JsonParser
         int byteCount = 0;
         bool trackBytes = true;
         bool hasStringContent = true;
-        bool hasHighBytes = false; // Track bytes >= 0x80 (non-ASCII) that signal binary data
+        bool hasHighBytes = false; // Track bytes >= 0x80 (non-ASCII); may be UTF-8 text or binary data
 
         try
         {
@@ -522,7 +523,7 @@ public static class JsonParser
                                 if (hasStringContent) sb.Append((char)c);
                                 if (trackBytes) AppendByte(ref byteBuffer, ref byteCount, (byte)c);
                                 // Note: \u00XX escapes are intentional Unicode, NOT raw binary.
-                                // Do NOT set hasHighBytes here — only raw source bytes >= 0x80
+                                // Do NOT set hasHighBytes here - only raw source bytes >= 0x80
                                 // (from Latin-1 decoded binary payloads) should trigger BinaryData.
                             }
                             else
@@ -546,16 +547,27 @@ public static class JsonParser
 
                 if (hasStringContent) sb.Append((char)c);
                 if (trackBytes) AppendByte(ref byteBuffer, ref byteCount, (byte)c);
-                // Detect raw bytes >= 0x80 which indicate binary data in the string.
-                // These come from Latin-1 decoded save file bytes that would fail strict
-                // UTF-8 decoding.
+                // Detect raw bytes >= 0x80 which may indicate binary data or
+                // UTF-8 multi-byte sequences read through Latin-1 encoding.
+                // The distinction is made after the string ends via UTF-8 validation.
                 if (c >= 0x80 && c <= 0xFF) hasHighBytes = true;
             }
 
-            // If any high bytes (0x80-0xFF) were found, this is binary data, not a valid
-            // UTF-8 string. Return as BinaryData.
+            // If any raw high bytes (0x80-0xFF) were found, the string may be either:
+            //   (a) UTF-8 encoded text (e.g. Greek λ, CJK characters, Cyrillic, etc.)
+            //       that was read through Latin-1 encoding, OR
+            //   (b) genuine binary data (e.g. TechPack payloads).
+            // Distinguish by checking whether the bytes form a valid UTF-8 sequence.
             if (hasHighBytes && trackBytes)
             {
+                var span = new ReadOnlySpan<byte>(byteBuffer, 0, byteCount);
+                if (Utf8.IsValid(span))
+                {
+                    // Valid UTF-8 text - decode to a proper Unicode string.
+                    return Encoding.UTF8.GetString(span);
+                }
+
+                // Not valid UTF-8 - genuine binary data.
                 var result = new byte[byteCount];
                 Array.Copy(byteBuffer, result, byteCount);
                 return new BinaryData(result);

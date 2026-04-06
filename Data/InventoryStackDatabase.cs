@@ -183,9 +183,14 @@ public static class InventoryStackDatabase
 
     /// <summary>
     /// Resolves the save-file <c>InventoryType</c> for a specific <see cref="GameItem"/>.
-    /// Uses the item's <c>IsProcedural</c> flag to correctly classify procedural
-    /// technology modules (UA_* items from "Technology Module") as "Technology"
-    /// rather than "Product".
+    /// <para>
+    /// Procedural items are always Technology.  Non-procedural items from
+    /// technology-source JSON files ("Technology", "Upgrades",
+    /// "Constructed Technology") are Technology when they carry charge data
+    /// (<c>ChargeValue &gt; 0</c>, populated from the game's <c>ChargeAmount</c>
+    /// field).  Items in those same files without charge data are products
+    /// that happen to live in the technology table (e.g. NAV_DATA_DROP).
+    /// </para>
     /// </summary>
     public static string ResolveInventoryTypeForItem(GameItem item)
     {
@@ -194,20 +199,50 @@ public static class InventoryStackDatabase
         if (item.IsProcedural)
             return "Technology";
 
+        // Items from technology-source JSON files that carry charge data
+        // (ChargeValue > 0, from ChargeAmount in the game data) are real
+        // technology items.  This covers Upgrades (HDRIVEBOOST*, UT_SHIP*,
+        // etc.) and Constructed Technology items that the base
+        // ResolveInventoryType would otherwise misclassify as Product.
+        if (item.ChargeValue > 0 && IsTechnologySourceType(item.ItemType))
+            return "Technology";
+
         return ResolveInventoryType(item.ItemType);
     }
 
     /// <summary>
+    /// Returns true for JSON file types that originate from the game's
+    /// GcTechnologyTable.  Items in these files <em>may</em> be real
+    /// technology (when they carry charge data) or stray products.
+    /// </summary>
+    private static bool IsTechnologySourceType(string itemType)
+    {
+        return itemType.Equals("Technology", StringComparison.OrdinalIgnoreCase)
+            || itemType.Equals("Upgrades", StringComparison.OrdinalIgnoreCase)
+            || itemType.Equals("Constructed Technology", StringComparison.OrdinalIgnoreCase);
+    }
+
+    /// <summary>
     /// Resolves the save-file <c>InventoryType</c> for an item being written to an
-    /// inventory slot.  This always returns the item's native type: Technology
-    /// items (including Upgrades / procedural tech) -> "Technology", Products ->
-    /// "Product", Substances -> "Substance".
+    /// inventory slot.  Delegates to <see cref="ResolveInventoryTypeForItem"/> when
+    /// a <see cref="GameItem"/> is available, falling back to the string-only
+    /// <see cref="ResolveInventoryType"/> otherwise.
     /// </summary>
     /// <param name="itemType">The item's <c>ItemType</c> from the database.</param>
     /// <param name="isTechInventory">Whether the target inventory is a tech-only inventory (unused - kept for API compatibility).</param>
     public static string ResolveSaveInventoryType(string? itemType, bool isTechInventory)
     {
         return ResolveInventoryType(itemType);
+    }
+
+    /// <summary>
+    /// Resolves the save-file <c>InventoryType</c> for a known <see cref="GameItem"/>
+    /// being written to an inventory slot.  Prefers the item-aware overload so that
+    /// Upgrades / Constructed Technology with charge data are correctly classified.
+    /// </summary>
+    public static string ResolveSaveInventoryType(GameItem item)
+    {
+        return ResolveInventoryTypeForItem(item);
     }
 
     /// <summary>

@@ -13,19 +13,19 @@ This guide walks you through every feature of the application so you can confide
 - [Tabs Overview][tabs-overview]
 - **Editing Guides:**
   - [Player Stats][player-stats]
-  - [Exosuit (Inventory)][exosuit]
-  - [Multitools][multitools]
+  - [Exosuit][exosuit]
+  - [Multi-tools][multitools]
   - [Starships][starships]
   - [Fleet (Freighter, Frigates & Squadron)][fleet]
   - [Exocraft (Vehicles)][exocraft]
   - [Companions (Pets)][companions]
-  - [Bases][bases]
-  - [Discoveries (Words, Glyphs & Recipes)][discoveries]
+  - [Bases & Storage][bases]
+  - [Catalogue (Technologies, Products, Words, Glyphs, Locations, Fishing & Recipes)][catalogue]
   - [Milestones][milestones]
   - [Settlements][settlements]
-  - [ByteBeat (Music)][bytebeat]
-  - [Account][account]
-  - [Export Configuration][export-config]
+  - [ByteBeats][bytebeat]
+  - [Account Rewards][account]
+  - [Export Settings][export-config]
   - [Raw JSON Editor][raw-json]
 - [Importing & Exporting Inventories][import-export]
 - [Changing Language][language]
@@ -138,7 +138,7 @@ If something goes wrong, you can restore from a backup:
 
 ## Tabs Overview
 
-NMSE organizes all editing features into tabs along the top of the window. Click any tab to switch to that section. <br>
+NMSE organises all editing features into tabs along the top of the window. Click any tab to switch to that section. <br>
 Most sections support export and import in different ways (with cross-editor compatibility).
 
 | Tab | What It Does |
@@ -151,9 +151,9 @@ Most sections support export and import in different ways (with cross-editor com
 | **Exocraft** | Exocraft vehicle inventories |
 | **Companions** | Companion management and creature creator |
 | **Bases & Storage** | Bases and NPCs, chest inventories and storage containers |
-| **Discoveries** | Words, glyphs, teleport locations, recipes, fish, product and technology discoveries |
+| **Catalogue** | Words, glyphs, teleport locations, recipes, fish, product and technology catalogue |
 | **Milestones** | Journey milestones and statistics |
-| **Settlements** | Settlement management |
+| **Settlements** | Settlement management and building editor |
 | **ByteBeats** | ByteBeat music library editor |
 | **Account Rewards** | Platform and season rewards |
 | **Export Settings** | Custom export/import settings |
@@ -536,9 +536,9 @@ You can edit the contents of your special storage containers. Each container has
 
 ---
 
-## Discoveries (Technologies, Products, Words, Glyphs, Locations, Fishing & Recipes)
+## Catalogue (Technologies, Products, Words, Glyphs, Locations, Fishing & Recipes)
 
-The **Discoveries** tab manages your discovery progress and knowledge.
+The **Catalogue** tab manages your discovery progress and knowledge.
 
 ### Sections
 
@@ -604,7 +604,7 @@ Count and Largest Catch stats can be edited by changing their values.
 | <img src="../img/discoveries-fish.png"> |
 
 #### Recipes
-Browse a basic version of the complete recipe database. The **Recipes** sub-tab shows all crafting recipes with their ingredients, organized by type and offers filtering and sorting options.<br>
+Browse a basic version of the complete recipe database. The **Recipes** sub-tab shows all crafting recipes with their ingredients, organised by type and offers filtering and sorting options.<br>
 Additional information for the recipe is offered at the bottom of the tab panel.
 
 | Recipes |
@@ -627,23 +627,7 @@ You can edit milestone progress values and global statistics tracked by the game
 
 ## Settlements
 
-The **Settlement** tab lets you manage your settlement.
-
-| Settlements |
-|------------|
-| <img src="../img/settlements.png"> |
-
-### What You Can Edit
-
-| Field | Description |
-|-------|-------------|
-| **Name** | Selected settlement name |
-| **Seed** | Settlement seed (appearance, stats) |
-| **Perks** | Active settlement bonuses |
-| **Decision Type** | Settlements current decision event type |
-| **Last Decision** | Settlements last decision event date |
-| **Stats** | Settlement population, happiness, productivity, upkeep, sentinel buildup, debt, alert buildup, bug attack buildup |
-| **Production** | What your settlement produces |
+The **Settlement** tab lets you manage your settlements.
 
 Select your settlement from the drop down menu.
 
@@ -651,6 +635,64 @@ Use the <kbd>Delete</kbd> button to delete a settlement.<br>
 The settlement is not removed from your known locations (teleporter) on purpose, so that you can go back to that location if you want. It can be removed from the known locations panel.
 
 Export / Import via the <kbd>Export</kbd> and <kbd>Import</kbd> buttons.
+
+### Stats & Perks
+
+| Stats & Perks |
+|-------------|
+| <img src="../img/settlements-stats.png"> |
+
+| Field | Description |
+|-------|-------------|
+| **Name** | Selected settlement name |
+| **Seed** | Settlement seed (appearance, stats) |
+| **NPC Race** | Settlement NPC race |
+| **Decision Type** | Settlements current decision event type |
+| **Last Decision** | Settlements last decision event date |
+| **Stats** | Settlement population, happiness, productivity, upkeep, sentinel buildup, debt, alert buildup, bug attack buildup |
+| **Timers** | Timers for stats |
+| **Mini Missions** | Mission seed and start time |
+| **Perks** | Active settlement bonuses (seed field for procedural perks) |
+
+Set values and timers from the available fields for each stats.
+
+Select Perks from the list and enter a seed on the right hand side of the list for procedural perks.
+
+### Production
+
+| **Production** | What your settlement produces |
+
+| Production |
+|-------------|
+| <img src="../img/settlements-production.png"> |
+
+Use the edit button to change what your settlement is producing.
+
+### Building States
+
+| **Building State Slots** | Edit the plots to change the status of the building in that plot |
+
+| Building States |
+|-------------|
+| <img src="../img/settlements-building-states.png"> |
+
+For each plot (numbered 01 to 48), you can set the buildings status via the number entry field (or drop down list for known safe values). <br>
+An approximation of the building is noted below the plots fields.
+
+These are a bitflag composites that pack multiple bolleans and small numbers into a single integer. Editing these manually is for advanced users.
+
+### Building Editor
+
+| **Building Editor** | Edit an individual building/plots bitfields directly |
+
+| Building Editor |
+|-------------|
+| <img src="../img/settlements-building-editor.png"> |
+
+Select the plot via the slot field. You can set the buildings status via the raw value number entry field. <br>
+The tick boxes below allow you to manipulate the bitflags in the bitfields within the composite integer. Each tickbox will manipulate the bits and produce the new integer to match.
+
+This panel is for advanced users and requires either known useful values, or a solid understanding of the bitflags to net the most benefit.
 
 ---
 
@@ -815,19 +857,19 @@ Made with ❤️ by [**vectorcmdr**][github-owner]
 [saving-changes]: #saving-your-changes
 [tabs-overview]: #tabs-overview
 [player-stats]: #player-stats
-[exosuit]: #exosuit-inventory
-[multitools]: #multitools
+[exosuit]: #exosuit
+[multitools]: #multi-tools
 [starships]: #starships
 [fleet]: #fleet-freighter-frigates--squadron
 [exocraft]: #exocraft-vehicles
 [companions]: #companions-pets
-[bases]: #bases
-[discoveries]: #discoveries-words-glyphs--recipes
+[bases]: #bases--storage
+[catalogue]: #catalogue-technologies-products-words-glyphs-locations-fishing--recipes
 [milestones]: #milestones
 [settlements]: #settlements
-[bytebeat]: #bytebeat-music
-[account]: #account
-[export-config]: #export-configuration
+[bytebeat]: #bytebeats
+[account]: #account-rewards
+[export-config]: #export-settings
 [raw-json]: #raw-json-editor
 [import-export]: #importing--exporting-inventories
 [language]: #changing-language
