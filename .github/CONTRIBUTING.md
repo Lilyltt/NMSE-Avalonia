@@ -19,6 +19,7 @@ Thank you for your interest in contributing! This project is licensed under **GP
 - Include tests for new behavior where appropriate.
 - Do not introduce external packages and libraries.
 - Do not include any code that is not compatible with the license.
+- Do not include any agent instructions, skills, etc. if the code used LLM assistance.
 - Any UI strings must pass through the localisation layer.
 
 ## 📝 Pull Requests
